@@ -22,22 +22,17 @@ utils: libs
 	cd src/parasol && ${MAKE}
 	./src/utils/userApps/mkREADME.sh ${DESTDIR}/${BINDIR} ${CURDIR}/kentUtils.Documentation.txt
 
-libs: installEnvironment
+libs: fetchSamtabix installEnvironment
 	cd samtabix && ${MAKE}
 	cd src && ${MAKE} libs
 
 clean:
 	test ! -d src || (cd src && ${MAKE} -i -k clean)
-
-fetchSource:
 	rm -fr samtabix
-	/bin/echo "fetch samtabix" 1>&2
-	git clone http://genome-source.cse.ucsc.edu/samtabix.git samtabix > /dev/null 2>&1
-	test -d .git || git clone https://github.com/ENCODE-DCC/kentUtils.git .
-	@/bin/echo -n "size of fetched kent source tree: "
-	@du -hs src
-	@/bin/echo -n "number of files in kent source tree: "
-	@find ./src -type f | wc -l
+
+fetchSamtabix:
+	test -d samtabix || /bin/echo "git clone fetch samtabix" 1>&2
+	test -d samtabix || git clone http://genome-source.cse.ucsc.edu/samtabix.git samtabix
 
 # this installEnvironment will add all the shell environment variables
 # to the src/inc/localEnvironment.mk file which is included
@@ -47,7 +42,7 @@ fetchSource:
 # recognize the '-e' argument
 
 installEnvironment:
-	@/bin/echo -e "export DESTDIR = ${DESTDIR}\n\
+	@echo -e "export DESTDIR = ${DESTDIR}\n\
 export BINDIR = ${BINDIR}\n\
 export MACHTYPE = ${MACHTYPE}\n\
 export CGI_BIN = ${CGI_BIN}\n\
