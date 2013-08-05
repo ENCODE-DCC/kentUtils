@@ -31,12 +31,12 @@ clean:
 
 fetchSource:
 	rm -fr samtabix
-	echo "fetch samtabix" 1>&2
+	/bin/echo "fetch samtabix" 1>&2
 	git clone http://genome-source.cse.ucsc.edu/samtabix.git samtabix > /dev/null 2>&1
-	git clone https://github.com/ENCODE-DCC/kentUtils.git .
-	@echo -n "size of fetched kent source tree: "
-	@du -hs kent
-	@echo -n "number of files in kent source tree: "
+	test -d .git || git clone https://github.com/ENCODE-DCC/kentUtils.git .
+	@/bin/echo -n "size of fetched kent source tree: "
+	@du -hs src
+	@/bin/echo -n "number of files in kent source tree: "
 	@find ./src -type f | wc -l
 
 # this installEnvironment will add all the shell environment variables
@@ -47,7 +47,7 @@ fetchSource:
 # recognize the '-e' argument
 
 installEnvironment:
-	@echo -e "export DESTDIR = ${DESTDIR}\n\
+	@/bin/echo -e "export DESTDIR = ${DESTDIR}\n\
 export BINDIR = ${BINDIR}\n\
 export MACHTYPE = ${MACHTYPE}\n\
 export CGI_BIN = ${CGI_BIN}\n\
@@ -60,5 +60,4 @@ export NOSQLTEST = 1" | sed -e 's/-e //' > src/inc/localEnvironment.mk
 
 update: clean
 	git pull
-	${MAKE} fetchSource
 	${MAKE} utils
