@@ -1,4 +1,4 @@
-#  Makefile for userApps project
+#  Makefile for kentUtils project
 #  performs the operations of fetching selected directories from
 #  the kent source tree using 'git' and then building the utilities
 #  in the kent source tree.  All build results will be kept locally
