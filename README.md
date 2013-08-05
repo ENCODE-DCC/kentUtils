@@ -19,9 +19,9 @@ gnu make - http://www.gnu.org/software/make/
 MySQL development system and libraries - http://dev.mysql.com/
 libpng runtime and development packages - http://www.libpng.org/
 libssl runtime and development packages - http://www.openssl.org/
-
-Optional:
 'git' source code management: http://git-scm.com/downloads
+
+These procedures expect the 'git' command to be available.
 
 It is best to install these packages with your standard operating
 system package management tools.
@@ -44,7 +44,7 @@ In the directory kentUtils/ run a 'make' command:
    cd kentUtils
    make
 
-The resulting binaries are placed in ./kentUtils/bin/
+The resulting binaries are placed in the directory: ./bin/
 
    Note: there are no required shell environment settings as discussed
          in the genome browser build instructions.  In fact, this build
@@ -55,11 +55,11 @@ The resulting binaries are placed in ./kentUtils/bin/
 Install utilities
 ====================
 
-   The binaries are built into ./userApps/bin/
+   The binaries are built into ./bin/
    To install them in a global bin/ directory, copy them
-   to a desired location, e.g.:
+   to a desired location, for example:
 
-      sudo rsync -a -P ./userApps/bin/ /usr/local/bin/kentUtils/
+      sudo rsync -a -P ./bin/ /usr/local/bin/kentUtils/
 
    The destination bin/kentUtils/ should be its own unique directory
    to avoid overwriting same-named binaries in a standard bin/ directory.
@@ -67,3 +67,82 @@ Install utilities
    Users add '/usr/local/bin/kentUtils' to their shell PATH
    to access the commands.
 
+====================
+Update utilities
+====================
+
+   This procedure expects the 'git' command to be available.
+
+   With the 'git' command available, the 'make update' will refresh
+   the source tree and rebuild.  In this directory:
+
+   make update
+
+   This runs a 'make clean' in the source tree, runs a 'git pull' update
+   for the source, then runs a 'make utils' to rebuild everything.
+
+====================
+Parasol
+====================
+
+   There are 'parasol' binaries built into ./src/parasol/bin/
+   Use these binaries to set up a job control system on a compute cluster
+   or large machine with many CPU cores.  See also:
+     http://genecats.cse.ucsc.edu/eng/parasol.htm
+   for more information.  The usage messages from each command will help
+   with the setup.
+
+====================
+Documentation
+====================
+
+   Each 'kent' command contains its own documentation.  Simply run the
+   commands without any arguments to see the usage message for operating
+   instructions.
+
+   When the utilities are built here, their usage messages have
+   been collected together in one file:
+        kentUtils.Documentation.txt
+
+============================
+Installing required packages
+============================
+
+On a MacOS system, you will need the XCode system installed:
+   https://developer.apple.com/xcode/
+And the Mac Ports install system: http://www.macports.org/
+
+With the Mac ports and XCode systems installed, you can install
+the additional packages required (and helpful):
+
+  sudo port install git-core gnutls rsync libpng mysql55 openssl curl wget
+
+On a typical Linux system, for example Ubuntu, use the apt-get command
+to install additional packages:
+
+   sudo apt-get install git libssl-dev openssl mysql-client-5.1 \
+      mysql-client-core-5.1
+
+Depending upon the version of your Linux/Ubuntu/CentOS operating system,
+the specific version of packages you need may be different than this example.
+
+Please use your standard operating system package management
+install system (e.g. 'yum' on CentOS) to obtain correct versions of
+these packages for your specific operating system version.
+
+See also:
+        https://help.ubuntu.com/8.04/serverguide/apt-get.html
+        http://www.centos.org/docs/5/html/yum/
+
+==============
+Known Problems
+==============
+
+   Please advise UCSC if you have the recommended installed libraries
+   and development system and this build will not function.
+   email to:  genome-www@soe.ucsc.edu
+
+1. These procedures will not work as-is on sparc or alpha machines or
+   with the Sun Solaris operating system.
+
+============================================================================
