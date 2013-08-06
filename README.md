@@ -153,11 +153,8 @@ Known Problems
 
 Please advise UCSC if you have the recommended installed libraries
 and development system and this build will not function.
-email to: <A HREF="mailto:&#103;&#101;n&#111;&#109;&#101;&#45;&#119;&#119;w&#64;&#115;&#111;&#101;.
-ucs&#99;.
-&#101;&#100;&#117;">
-&#103;&#101;n&#111;&#109;&#101;&#45;&#119;&#119;w&#64;&#115;&#111;&#101;.
-ucs&#99;.
+email to: <A HREF="mailto:&#103;&#101;n&#111;&#109;&#101;&#45;&#119;&#119;w&#64;&#115;&#111;&#101;.ucs&#99;.&#101;&#100;&#117;">
+&#103;&#101;n&#111;&#109;&#101;&#45;&#119;&#119;w&#64;&#115;&#111;&#101;.ucs&#99;.
 &#101;&#100;&#117;</A>
 
 1. These procedures will not work as-is on sparc or alpha machines or
