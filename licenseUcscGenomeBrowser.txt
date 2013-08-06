@@ -9,7 +9,9 @@ restrictions pertaining to that data set.
 
 To purchase a license:
 
-Read and sign the licensing agreement.  (GenomeBrowserLicense.pdf)
+Read and sign the licensing agreement:
+     http://genome.ucsc.edu/license/gblicense.pdf
+
 Email a signed copy of the license agreement to
     William Hale, Office for IP Management: whale3@ucsc.edu.
 
