@@ -23,9 +23,7 @@ System Requirements
 These procedures expect the 'git' command to be available.
 
 It is best to install these packages with your standard operating
-system package management tools.
-
-    (see [notes below](/ENCODE-DCC/kentUtils/blob/master/README.md#install) about installing packages)
+system package management tools.  See also: [notes below](/ENCODE-DCC/kentUtils/blob/master/README.md#install) about installing packages.
 
 
 Download source
