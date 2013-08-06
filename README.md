@@ -118,8 +118,7 @@ This '.hg.conf' file is used by the kent commands to determine the
 MySQL host and user/password to the database.  For your local MySQL
 installation, use your host name and your read-only user/password names.
 
-<A name="install">
-Installing required packages</A>
+Installing required packages
 ----------------------------
 
 On a MacOS system, you will need the [XCode](https://developer.apple.com/xcode/)
