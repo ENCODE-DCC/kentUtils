@@ -10,7 +10,7 @@ For the genome browser install, use the instructions from the source tree:
 [src/product/](http://genome-source.cse.ucsc.edu/gitweb/?p=kent.git;a=tree;f=src/product)
 
 System Requirements
-====================
+-------------------
 
 * Linux/Ubuntu/CentOS/Unix/MacOSX operating system
 * gnu gcc - C code development system - http://www.gnu.org/software/gcc/
@@ -25,10 +25,11 @@ These procedures expect the 'git' command to be available.
 It is best to install these packages with your standard operating
 system package management tools.
 
-    (see notes below about installing packages)
+    (see [notes below](/ENCODE-DCC/kentUtils/blob/master/README.md#install) about installing packages)
+
 
 Download source
-====================
+---------------
 
 Obtain a read-only copy of the source:
 
@@ -37,7 +38,7 @@ Obtain a read-only copy of the source:
 Creates the directory: ./kentUtils/
 
 Build utilities
-====================
+---------------
 
 In the directory kentUtils/ run a 'make' command:
 
@@ -52,7 +53,7 @@ The resulting binaries are placed in the directory: ./bin/
         you may have for the genome browser build environment.
 
 Install utilities
-====================
+-----------------
 
 The binaries are built into ./bin/
 
@@ -68,7 +69,7 @@ Users add '/usr/local/bin/kentUtils' to their shell PATH
 to access the commands.
 
 Update utilities
-====================
+----------------
 
 This procedure expects the 'git' command to be available.
 
@@ -81,19 +82,17 @@ This runs a 'make clean' in the source tree, runs a 'git pull' update
 for the source, then runs a 'make utils' to rebuild everything.
 
 Parasol
-====================
+-------
 
 There are 'parasol' binaries built into ./src/parasol/bin/
 Use these binaries to set up a job control system on a compute cluster
-or large machine with many CPU cores.  See also:
-
-    [parasol README[(http://genecats.cse.ucsc.edu/eng/parasol.htm)
-
+or large machine with many CPU cores.
+See also: [parasol README](http://genecats.cse.ucsc.edu/eng/parasol.htm)
 for more information.  The usage messages from each command will help
 with the setup.
 
 Documentation
-====================
+-------------
 
 Each 'kent' command contains its own documentation.  Simply run the
 commands without any arguments to see the usage message for operating
@@ -105,7 +104,7 @@ been collected together in one file:
     kentUtils.Documentation.txt
 
 MySQL database access
-=====================
+---------------------
 
 Many of the commands can use the UCSC public MySQL server, or
 your own local MySQL server with UCSC data formats.  Add these three
@@ -117,11 +116,12 @@ its permissions to: 'chmod 600 .hg.conf'
     db.password=password
 
 This '.hg.conf' file is used by the kent commands to determine the
-MySQL host and user/password to the database.  For you local MySQL
+MySQL host and user/password to the database.  For your local MySQL
 installation, use your host name and your read-only user/password names.
 
-Installing required packages
-============================
+<A name="install">
+Installing required packages</A>
+----------------------------
 
 On a MacOS system, you will need the [XCode](https://developer.apple.com/xcode/)
 system installed.
@@ -136,8 +136,7 @@ the additional packages required (and helpful):
 On a typical Linux system, for example Ubuntu, use the apt-get command
 to install additional packages:
 
-    sudo apt-get install git libssl-dev openssl mysql-client-5.1 \
-        mysql-client-core-5.1
+    sudo apt-get install git libssl-dev openssl mysql-client-5.1 mysql-client-core-5.1
 
 Depending upon the version of your Linux/Ubuntu/CentOS operating system,
 the specific version of packages you need may be different than this example.
@@ -152,11 +151,16 @@ See also:
 * [yum](http://www.centos.org/docs/5/html/yum/)
 
 Known Problems
-==============
+--------------
 
 Please advise UCSC if you have the recommended installed libraries
 and development system and this build will not function.
-email to:  genome-www@soe.ucsc.edu
+email to: <A HREF="mailto:&#103;&#101;n&#111;&#109;&#101;&#45;&#119;&#119;w&#64;&#115;&#111;&#101;.
+ucs&#99;.
+&#101;&#100;&#117;">
+&#103;&#101;n&#111;&#109;&#101;&#45;&#119;&#119;w&#64;&#115;&#111;&#101;.
+ucs&#99;.
+&#101;&#100;&#117;</A>
 
 1. These procedures will not work as-is on sparc or alpha machines or
    with the Sun Solaris operating system.
