@@ -160,4 +160,9 @@ email to: <A HREF="mailto:&#103;&#101;n&#111;&#109;&#101;&#45;&#119;&#119;w&#64;
 1. These procedures will not work as-is on sparc or alpha machines or
    with the Sun Solaris operating system.
 
+Update history
+--------------
+
+17 Dec 2013 - brought up to date from version version 286 to version 293 source
+
 ============================================================================
