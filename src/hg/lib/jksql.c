@@ -238,6 +238,8 @@ static struct sqlProfile* sqlProfileFindByDatabase(char *database)
 /* find a profile using database as profile name, return the default if not
  * found */
 {
+if (!database)
+    return defaultProfile;
 struct sqlProfile *sp = hashFindVal(dbToProfile, database);
 if (sp == NULL)
     sp = defaultProfile;
@@ -258,7 +260,7 @@ static struct sqlProfile* sqlProfileGet(char *profileName, char *database)
  * return NULL if not found.
  */
 {
-assert((profileName != NULL) || (database != NULL));
+//assert((profileName != NULL) || (database != NULL));
 if (profiles == NULL)
     sqlProfileLoad();
 
@@ -734,6 +736,8 @@ if ((sc->conn = conn = mysql_init(NULL)) == NULL)
     monitorLeave();
     errAbort("Couldn't connect to mySQL.");
     }
+// Fix problem where client LOCAL setting is disabled by default for security
+mysql_options(conn, MYSQL_OPT_LOCAL_INFILE, NULL);
 if (mysql_real_connect(
 	conn,
 	host, /* host */
@@ -917,7 +921,8 @@ if (mysql_real_query(conn, query, strlen(query)) != 0)
     if (abort)
         {
         monitorLeave();
-	dumpStack("DEBUG Can't start query"); // Extra debugging info. DEBUG REMOVE
+	if (sameOk(cfgOption("noSqlInj.dumpStack"), "on"))
+    	    dumpStack("DEBUG Can't start query"); // Extra debugging info. DEBUG REMOVE
 	sqlAbort(sc, "Can't start query:\n%s\n", query);
         }
     }
@@ -1097,17 +1102,22 @@ char query[256];
 struct sqlResult *sr;
 if (sameString(table,""))
     {
-    dumpStack("jksql sqlTableExists: Buggy code is feeding me empty table name. table=[%s].\n", table); fflush(stderr); // log only
+    if (sameOk(cfgOption("noSqlInj.dumpStack"), "on"))
+	dumpStack("jksql sqlTableExists: Buggy code is feeding me empty table name. table=[%s].\n", table); fflush(stderr); // log only
     return FALSE;
     }
 // TODO If the ability to supply a list of tables is hardly used,
 // then we could switch it to simply %s below supporting a single
 // table at a time more securely.
 if (strchr(table,','))
-    dumpStack("sqlTableExists called on multiple tables with table=[%s]\n", table);
+    {
+    if (sameOk(cfgOption("noSqlInj.dumpStack"), "on"))
+	dumpStack("sqlTableExists called on multiple tables with table=[%s]\n", table);
+    }
 if (strchr(table,'%'))
     {
-    dumpStack("jksql sqlTableExists: Buggy code is feeding me junk wildcards. table=[%s].\n", table); fflush(stderr); // log only
+    if (sameOk(cfgOption("noSqlInj.dumpStack"), "on"))
+	dumpStack("jksql sqlTableExists: Buggy code is feeding me junk wildcards. table=[%s].\n", table); fflush(stderr); // log only
     return FALSE;
     }
 if (strchr(table,'-'))
@@ -1117,8 +1127,8 @@ if (strchr(table,'-'))
     // if the first chrom name has a dash in it. Examples found were: scaffold_0.1-193456 scaffold_0.1-13376 HERVE_a-int 1-1
     // Assembly hubs also may have dashes in chrom names.
     }
-sqlSafef(query, sizeof(query), "SELECT 1 FROM %-s LIMIT 0", sqlCkIl(table));  // DEBUG RESTORE
-//safef(query, sizeof(query), "NOSQLINJ SELECT 1 FROM %s LIMIT 0", table);  // DEBUG REMOVE
+sqlSafef(query, sizeof(query), "SELECT 1 FROM %-s LIMIT 0", sqlCkIl(table));  
+//sqlSafef(query, sizeof(query), "SELECT 1 FROM %-s LIMIT 0", sqlCkId(table));  // DEBUG RESTORE
 if ((sr = sqlUseOrStore(sc,query,mysql_use_result, FALSE)) == NULL)
     return FALSE;
 // TODO consider using sqlGetResultExt or something that would
@@ -1276,7 +1286,8 @@ int sqlUpdateRows(struct sqlConnection *conn, char *query, int* matched)
 /* Execute an update query, returning the number of rows change.  If matched
  * is not NULL, it gets the total number matching the query. */
 {
-int numChanged, numMatched;
+int numChanged = 0;
+int numMatched = 0;
 const char *info;
 int numScan = 0;
 struct sqlResult *sr = sqlGetResult(conn,query);
@@ -1352,7 +1363,8 @@ boolean doDisableKeys = FALSE;
 
 /* determine if tab file can be accessed directly by the database, or send
  * over the network */
-if ((options & SQL_TAB_FILE_ON_SERVER) && !sqlIsRemote(conn))
+bool sqlNeverLocal = cfgOptionBooleanDefault("db.neverLocal", 0);
+if (((options & SQL_TAB_FILE_ON_SERVER) && !sqlIsRemote(conn)) | sqlNeverLocal)
     {
     /* tab file on server requiries full path */
     strcpy(tabPath, "");
@@ -2786,12 +2798,12 @@ while((c = *s++) != 0)
 	{
 	// DEBUG REMOVE Temporary for trying to track down some weird error 
 	//  because the stackdump should appear but does not.
-	//dumpStack("character %c disallowed in sql string part %s\n", c, sOriginal);  // DEBUG REMOVE GALT 
+	//if (sameOk(cfgOption("noSqlInj.dumpStack"), "on"))
+	//    dumpStack("character %c disallowed in sql string part %s\n", c, sOriginal);  // DEBUG REMOVE GALT 
 
 	// TODO for some reason the warn stack is messed up sometimes very eary. -- happening in hgTables position search on brca
 	//warn("character %c disallowed in sql string part %s", c, sOriginal);
 
-	// DEBUG REMOVE GALT 
 	// just using this as a work-around
 	// until the problem with early errors and warn/abort stacks has been fixed.
 	char *noSqlInjLevel = cfgOption("noSqlInj.level");
@@ -3063,7 +3075,6 @@ va_copy(orig_args, args);
 int formatLen = strlen(format);
 
 char escPunc = 0x01;  // using char 1 as special char to denote strings needing escaping
-//char escPunc = '`';  // DEBUG REMOVE
 char *newFormat = NULL;
 int newFormatSize = 2*formatLen + 1;
 if (newString)
@@ -3165,12 +3176,12 @@ while (i < formatLen)
 			    }
 			else
 			    {
-			    escStringsSize += strlen(s);  // TODO do we need this variable?
+			    escStringsSize += strlen(s);
 			    // DEBUG temporary check for signs of double-escaping, can remove later for a minor speedup:
-			    //if (strstr(s, "\\\\\\\\"))  // this is really 4 backslashes
 			    if (strstr(s, "\\\\"))  // this is really 2 backslashes
 				{
-				dumpStack("potential sign of double sql-escaping in string [%s]", s);
+				if (sameOk(cfgOption("noSqlInj.dumpStack"), "on"))
+				    dumpStack("potential sign of double sql-escaping in string [%s]", s);
 				}
 			    }
 			}

@@ -11,6 +11,11 @@
 #include "dystring.h"
 
 #define DEFAULTCONNECTTIMEOUTMSEC 10000  /* default connect timeout for tcp in milliseconds */
+#define DEFAULTREADWRITETTIMEOUTSEC 120  /* default read/write timeout for tcp in seconds */
+
+int setReadWriteTimeouts(int sd, int seconds);
+/* Set read and write timeouts on socket sd 
+ * Return -1 if there are any errors, 0 if successful. */
 
 /* add a failure to connFailures[]
  *  which can save time and avoid more timeouts */
@@ -50,11 +55,11 @@ int netWaitForData(int sd, int microseconds);
 void netBlockBrokenPipes();
 /* Make it so a broken pipe doesn't kill us. */
 
-size_t netReadAll(int sd, void *vBuf, size_t size);
+ssize_t netReadAll(int sd, void *vBuf, ssize_t size);
 /* Read given number of bytes into buffer.
  * Don't give up on first read! */
 
-int netMustReadAll(int sd, void *vBuf, size_t size);
+ssize_t netMustReadAll(int sd, void *vBuf, ssize_t size);
 /* Read given number of bytes into buffer or die.
  * Don't give up if first read is short! */
 

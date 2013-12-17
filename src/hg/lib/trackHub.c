@@ -40,6 +40,7 @@
 #include "hgFind.h"
 #include "hubConnect.h"
 #include "trix.h"
+#include "vcf.h"
 
 static struct hash *hubCladeHash;  // mapping of clade name to hub pointer
 static struct hash *hubAssemblyHash; // mapping of assembly name to genome struct
@@ -133,7 +134,9 @@ db->organism = cloneString(hubGenome->organism);
 db->name = cloneString(hubGenome->name);
 db->active = TRUE;
 db->description = cloneString(hubGenome->description);
-db->orderKey = sqlUnsigned(hashFindVal(hubGenome->settingsHash, "orderKey"));
+char *orderKey = hashFindVal(hubGenome->settingsHash, "orderKey");
+if (orderKey != NULL)
+    db->orderKey = sqlUnsigned(orderKey);
 
 return db;
 }
@@ -448,11 +451,21 @@ while ((ra = raNextRecord(lf)) != NULL)
 	{
 	//printf("reading genome %s twoBitPath %s\n", genome, el->twoBitPath);
 	el->description  = hashFindVal(ra, "description");
-	el->organism  = addHubName(hashFindVal(ra, "organism"), hub->name);
+	char *organism = hashFindVal(ra, "organism");
+	if (organism == NULL)
+	    errAbort("must have 'organism' set in assembly hub in stanza ending line %d of %s",
+		     lf->lineIx, lf->fileName);
+	el->organism  = addHubName(organism, hub->name);
 	hashReplace(ra, "organism", el->organism);
 	el->defaultPos  = hashFindVal(ra, "defaultPos");
+	if (el->defaultPos == NULL)
+	    errAbort("must have 'defaultPos' set in assembly hub in stanza ending line %d of %s",
+		     lf->lineIx, lf->fileName);
 	el->twoBitPath = trackHubRelativeUrl(url, twoBitPath);
-	hashReplace(ra, "htmlPath",trackHubRelativeUrl(url, hashFindVal(ra, "htmlPath")));
+
+	char *htmlPath = hashFindVal(ra, "htmlPath");
+	if (htmlPath != NULL)
+	    hashReplace(ra, "htmlPath",trackHubRelativeUrl(url, htmlPath));
 	if (groups != NULL)
 	    el->groups = trackHubRelativeUrl(url, groups);
 	addAssembly(genome, el, hub);
@@ -509,6 +522,10 @@ hub->genomesFile = trackHubRequiredSetting(hub, "genomesFile");
 
 lineFileClose(&lf);
 char *genomesUrl = trackHubRelativeUrl(hub->url, hub->genomesFile);
+
+if (genomesUrl == NULL)
+    errAbort("badly formatted genomesFile setting (%s) in hub %s\n", 
+	    hub->genomesFile, hub->url);
 
 hub->genomeHash = hashNew(8);
 hub->genomeList = trackHubGenomeReadRa(genomesUrl, hub);
@@ -817,6 +834,15 @@ if (relativeUrl != NULL)
 	    /* Just open and close to verify file exists and is correct type. */
 	    struct bbiFile *bbi = bigBedFileOpen(bigDataUrl);
 	    bbiFileClose(&bbi);
+	    }
+	else if (startsWithWord("vcfTabix", type))
+	    {
+	    /* Just open and close to verify file exists and is correct type. */
+	    struct vcfFile *vcf = vcfFileMayOpen(bigDataUrl, 1, 1, FALSE);
+
+	    if (vcf == NULL)
+	       errAbort("%s is not a VCF file", bigDataUrl);
+	    vcfFileFree(&vcf);
 	    }
 	else if (startsWithWord("bam", type))
 	    {

@@ -25,7 +25,7 @@ O = acemblyClass.o affyAllExonProbe.o affyAtlas.o affy10KDetails.o affy120KDetai
     bedDetail.o \
     customFactory.o customPp.o customTrack.o cutter.o cv.o cytoBand.o \
     dbDb.o dbRIP.o dbSnpRs.o defaultDb.o delConrad2.o delHinds2.o \
-    dgv.o dless.o dnaMotifSql.o dnaMarkovSql.o dnaProbe.o \
+    dgv.o dgvPlus.o dless.o dnaMotifSql.o dnaMarkovSql.o dnaProbe.o \
     dv.o dvBed.o dvXref2.o \
     easyGene.o ec.o ecCode.o ecAttribute.o ecAttributeCode.o \
     encode/encodeErge.o encode/encodeErgeHssCellLines.o \
@@ -44,7 +44,7 @@ O = acemblyClass.o affyAllExonProbe.o affyAtlas.o affy10KDetails.o affy120KDetai
     encode3/encode2Manifest.o encode3/encode3Valid.o \
     ensFace.o ensInfo.o ensPhusionBlast.o ensXRefZfish.o \
     est3.o estOrientInfo.o \
-    estPair.o exoFish.o expData.o expRecord.o exprBed.o \
+    estPair.o exoFish.o expData.o expRecord.o exprBed.o factorSource.o \
     fbTables.o featureBits.o fileUi.o findKGAlias.o findKGProtAlias.o fishClones.o \
     flyBase2004Xref.o \
     flyBaseSwissProt.o flyreg.o flyreg2.o gbExtFile.o gbWarn.o gbMiscDiff.o gbProtAnn.o gcPercent.o gbSeq.o \
@@ -67,7 +67,7 @@ O = acemblyClass.o affyAllExonProbe.o affyAtlas.o affy10KDetails.o affy120KDetai
     jgiGene.o \
     kgAlias.o kgColor.o kgProtAlias.o kgXref.o knownInfo.o knownMore.o knownToSuper.o \
     ld.o ld2.o lfs.o liftOver.o liftOverChain.o liftUp.o \
-    llaInfo.o lsSnpPdb.o lsSnpPdbChimera.o mafFrames.o mafGene.o mafSummary.o \
+    llaInfo.o lrg.o lsSnpPdb.o lsSnpPdbChimera.o mafFrames.o mafGene.o mafSummary.o \
     makeItemsItem.o mammalPsg.o mapSts.o \
     mcnBreakpoints.o mdb.o metaChromGraph.o microarray.o \
     minChromSize.o minGeneInfo.o mrnaMisMatch.o \
@@ -79,13 +79,14 @@ O = acemblyClass.o affyAllExonProbe.o affyAtlas.o affy10KDetails.o affy120KDetai
     rangeTreeFile.o rankProp.o recombRate.o recombRateRat.o recombRateMouse.o \
     refLink.o refSeqStatus.o \
     rgdQtl.o riken.o rhMapZfishInfo.o rikenBest.o rikenCluster.o rmskOut.o \
+    rmskAlign.o rmskJoined.o rmskOut2.o \
     rnaFold.o rnaGene.o rnaGroup.o rnaHybridization.o rnaPLFold.o tRNAs.o gbRNAs.o snoRNAs.o lowelabPfamHit.o lowelabArkinOperonScore.o lowelabTIGROperonScore.o \
     rnaSecStr.o tfbsConsFactors.o \
     roughAli.o transMapStuff.o transMapInfo.o transMapGene.o transMapSrc.o \
     sage.o sageCounts.o sageExp.o samAlignment.o sample.o \
     sanger22extra.o sangerGene.o sangerGeneToWBGeneID.o  sargassoSeaXra.o \
     scopDes.o scoredRef.o search.o sgdAbundance.o \
-    sgdClone.o sgdDescription.o sgdOther.o simpleNucDiff.o simpleRepeat.o \
+    sgdClone.o sgdDescription.o sgdOther.o simpleNucDiff.o simpleRepeat.o snakeUi.o \
     snp.o snp125.o snp125CodingCoordless.o snp132Ext.o snpExceptions.o snpFasta.o snpMap.o snpTmp.o \
     snpUi.o snp125Exceptions.o snp125Ui.o softPromoter.o softberryHom.o soTerm.o \
     spDb.o splignAlign.o stanMad.o stsAlias.o \

@@ -7,4 +7,16 @@ char *encode3CalcValidationKey(char *md5Hex, long long fileSize);
 /* calculate validation key to discourage faking of validation.  Do freeMem on 
  *result when done. */
 
+void encode3ValidateRcc(char *path);
+/* Validate a nanostring rcc file. */
+
+void encode3ValidateIdat(char *path);
+/* Validate illumina idat file. */
+
+boolean encode3IsGzipped(char *path);
+/* Return TRUE if file at path starts with GZIP signature */
+
+boolean encode3CheckEnrichedIn(char *enriched);
+/* return TRUE if value is allowed */
+
 #endif /* ENCODE3VALID_H */

@@ -55,8 +55,9 @@ struct annoStreamDb
 	int ix;				// offset in buffer, [0..size]
         } rowBuf;
 
-    char **(*nextRowRaw)(struct annoStreamDb *self, char *minChrom, uint minEnd);
+    char **(*nextRowRaw)(struct annoStreamDb *self);
     // Depending on query style, use either sqlNextRow or temporary row storage to get next row.
+    // This may return NULL but set self->needQuery; asdNextRow watches for that.
 
     void (*doQuery)(struct annoStreamDb *self, char *minChrom, uint minEnd);
     // Depending on query style, perform either a single query or (series of) chunked query
@@ -105,7 +106,7 @@ resetMergeState(self);
 resetChunkState(self);
 }
 
-static char **nextRowFromSqlResult(struct annoStreamDb *self, char *minChrom, uint minEnd)
+static char **nextRowFromSqlResult(struct annoStreamDb *self)
 /* Stream rows directly from self->sr. */
 {
 return sqlNextRow(self->sr);
@@ -156,6 +157,7 @@ if (self->maxOutRows > 0)
 struct sqlResult *sr = sqlGetResult(self->conn, query->string);
 dyStringFree(&query);
 self->sr = sr;
+self->needQuery = FALSE;
 }
 
 static void rowBufInit(struct rowBuf *rowBuf, int size)
@@ -238,8 +240,11 @@ static void asdDoQueryChunking(struct annoStreamDb *self, char *minChrom, uint m
 struct annoStreamer *sSelf = &(self->streamer);
 struct dyString *query = sqlDyStringCreate("select * from %s ", self->table);
 if (sSelf->chrom != NULL && self->rowBuf.size > 0 && !self->doNextChunk)
+    {
     // We're doing a region query, we already got some rows, and don't need another chunk:
+    resetRowBuf(&self->rowBuf);
     self->eof = TRUE;
+    }
 if (self->useMaxOutRows)
     {
     self->maxOutRows -= self->rowBuf.size;
@@ -257,7 +262,8 @@ if (self->hasBin)
     // accumulating initial coarse-bin items and merge-sorting them with
     // subsequent finest-bin items which will be in chromStart order.
     if (self->doNextChunk && self->mergeBins && !self->gotFinestBin)
-	errAbort("annoStreamDb can't continue merge in chunking query; increase ASD_CHUNK_SIZE");
+	errAbort("annoStreamDb %s: can't continue merge in chunking query; "
+		 "increase ASD_CHUNK_SIZE", sSelf->name);
     self->mergeBins = TRUE;
     if (self->qLm == NULL)
 	self->qLm = lmInit(0);
@@ -289,9 +295,14 @@ if (sSelf->chrom != NULL)
 	}
     if (self->doNextChunk)
 	sqlDyStringPrintf(query, "%s >= %u and ", self->startField, self->nextChunkStart);
-    sqlDyStringPrintf(query, "%s < %u and %s > %u limit %d", self->startField, sSelf->regionEnd,
-		   self->endField, start, queryMaxItems);
+    sqlDyStringPrintf(query, "%s < %u and %s > %u ", self->startField, sSelf->regionEnd,
+		      self->endField, start);
+    if (self->notSorted)
+	sqlDyStringPrintf(query, "order by %s ", self->startField);
+    sqlDyStringPrintf(query, "limit %d", queryMaxItems);
     bufferRowsFromSqlQuery(self, query->string, queryMaxItems);
+    if (self->rowBuf.size == 0)
+	self->eof = TRUE;
     }
 else
     {
@@ -299,7 +310,10 @@ else
     if (self->queryChrom == NULL)
 	self->queryChrom = self->chromList;
     else if (!self->doNextChunk)
+	{
 	self->queryChrom = self->queryChrom->next;
+	resetMergeState(self);
+	}
     if (minChrom != NULL)
 	{
 	// Skip chroms that precede minChrom
@@ -343,6 +357,8 @@ else
 	    // region end is chromSize, so no need to constrain startField here:
 	    sqlDyStringPrintf(query, "%s > %u ", self->endField, start);
 	    }
+	if (self->notSorted)
+	    sqlDyStringPrintf(query, "order by %s ", self->startField);
 	dyStringPrintf(query, "limit %d", queryMaxItems);
 	bufferRowsFromSqlQuery(self, query->string, queryMaxItems);
 	// If there happens to be no items on chrom, try again with the next chrom:
@@ -353,7 +369,7 @@ else
 dyStringFree(&query);
 }
 
-static char **nextRowFromBuffer(struct annoStreamDb *self, char *minChrom, uint minEnd)
+static char **nextRowFromBuffer(struct annoStreamDb *self)
 /* Instead of streaming directly from self->sr, we have buffered up the results
  * of a chunked query; return the head of that queue. */
 {
@@ -362,9 +378,25 @@ if (rowBuf->ix > rowBuf->size)
     errAbort("annoStreamDb %s: rowBuf overflow (%d > %d)", self->streamer.name,
 	     rowBuf->ix, rowBuf->size);
 if (rowBuf->ix == rowBuf->size)
+    {
     // Last row in buffer -- we'll need another query to get subsequent rows (if any).
-    asdDoQueryChunking(self, minChrom, minEnd);
-return rowBuf->buf[rowBuf->ix++];
+    // But first, see if we need to update gotFinestBin, since getFinestBin might be
+    // one of our callers.
+    if (rowBuf->size > 0)
+	{
+	char **lastRow = rowBuf->buf[rowBuf->size-1];
+	int lastBin = atoi(lastRow[0]);
+	if (lastBin >= self->minFinestBin)
+	    self->gotFinestBin = TRUE;
+	}
+    self->needQuery = TRUE;
+    // Bounce back out -- asdNextRow will need to do another query.
+    return NULL;
+    }
+if (rowBuf->size == 0)
+    return NULL;
+else
+    return rowBuf->buf[rowBuf->ix++];
 }
 
 static char **nextRowFiltered(struct annoStreamDb *self, boolean *retRightFail,
@@ -373,7 +405,7 @@ static char **nextRowFiltered(struct annoStreamDb *self, boolean *retRightFail,
  * or end of data.  Return row or NULL, and return right-join fail status via retRightFail. */
 {
 int numCols = self->streamer.numCols;
-char **row = self->nextRowRaw(self, minChrom, minEnd);
+char **row = self->nextRowRaw(self);
 if (minChrom != NULL && row != NULL)
     {
     // Ignore rows that fall completely before (minChrom, minEnd) - save annoGrator's time
@@ -383,7 +415,7 @@ if (minChrom != NULL && row != NULL)
     while (row &&
 	   ((chromCmp = strcmp(row[chromIx], minChrom)) < 0 || // this chrom precedes minChrom
 	    (chromCmp == 0 && atoll(row[endIx]) < minEnd)))    // on minChrom, but before minEnd
-	row = self->nextRowRaw(self, minChrom, minEnd);
+	row = self->nextRowRaw(self);
     }
 boolean rightFail = FALSE;
 struct annoFilter *filterList = self->streamer.filters;
@@ -391,7 +423,7 @@ while (row && annoFilterRowFails(filterList, row+self->omitBin, numCols, &rightF
     {
     if (rightFail)
 	break;
-    row = self->nextRowRaw(self, minChrom, minEnd);
+    row = self->nextRowRaw(self);
     }
 *retRightFail = rightFail;
 return row;
@@ -518,11 +550,24 @@ struct annoStreamDb *self = (struct annoStreamDb *)vSelf;
 if (self->needQuery)
     self->doQuery(self, minChrom, minEnd);
 if (self->mergeBins)
-    return nextRowMergeBins(self, minChrom, minEnd, callerLm);
+    {
+    struct annoRow *aRow = nextRowMergeBins(self, minChrom, minEnd, callerLm);
+    if (aRow == NULL && self->needQuery && !self->eof)
+	// Recurse: query, then get next merged/filtered row:
+	return asdNextRow(vSelf, minChrom, minEnd, callerLm);
+    else
+	return aRow;
+    }
 boolean rightFail = FALSE;
 char **row = nextRowFiltered(self, &rightFail, minChrom, minEnd);
 if (row == NULL)
-    return NULL;
+    {
+    if (self->needQuery && !self->eof)
+	// Recurse: query, then get next merged/filtered row:
+	return asdNextRow(vSelf, minChrom, minEnd, callerLm);
+    else
+	return NULL;
+    }
 return rowToAnnoRow(self, row, rightFail, callerLm);
 }
 
@@ -567,6 +612,17 @@ sqlFreeResult(&sr);
 return indexName;
 }
 
+static boolean isIncrementallyUpdated(char *table)
+// Tables that have rows added to them after initial creation are not completely sorted
+// because of new rows at end, so we have to 'order by'.
+{
+return (sameString(table, "refGene") || sameString(table, "refFlat") ||
+	sameString(table, "xenoRefGene") || sameString(table, "xenoRefFlat") ||
+	sameString(table, "all_mrna") || sameString(table, "xenoMrna") ||
+	sameString(table, "all_est") || sameString(table, "xenoEst") ||
+	sameString(table, "refSeqAli") || sameString(table, "xenoRefSeqAli"));
+}
+
 struct annoStreamer *annoStreamDbNew(char *db, char *table, struct annoAssembly *aa,
 				     struct asObject *asObj, int maxOutRows)
 /* Create an annoStreamer (subclass) object from a database table described by asObj. */
@@ -602,6 +658,10 @@ if (!asdInitBed3Fields(self))
 // and that ruins the sorting.  Fortunately most tables don't anymore.
 self->endFieldIndexName = sqlTableIndexOnField(self->conn, self->table, self->endField);
 self->notSorted = FALSE;
+// Special case: genbank-updated tables are not sorted because new mappings are
+// tacked on at the end.
+if (isIncrementallyUpdated(table))
+    self->notSorted = TRUE;
 self->mergeBins = FALSE;
 self->maxOutRows = maxOutRows;
 self->useMaxOutRows = (maxOutRows > 0);

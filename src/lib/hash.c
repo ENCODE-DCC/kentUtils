@@ -241,7 +241,8 @@ return hashAdd(hash, name, NULL)->name;
 }
 
 int hashIntVal(struct hash *hash, char *name)
-/* Find size of name in hash or die trying. */
+/* Return integer value associated with name in a simple 
+ * hash of ints. */
 {
 void *val = hashMustFindVal(hash, name);
 return ptToInt(val);
@@ -715,3 +716,22 @@ for (i=0; i<hash->size; ++i)
     n += bucketLen(hash->table[i]);
 return n;
 }
+
+struct hash *hashFromString(char *string)
+/* parse a whitespace-separated string with tuples in the format name=val or
+ * name="val" to a hash name->val */
+{
+if (string==NULL)
+    return NULL;
+
+struct slPair *keyVals = slPairListFromString(string, TRUE);
+if (keyVals==NULL)
+    return NULL;
+
+struct hash *nameToVal = newHash(0);
+struct slPair *kv;
+for (kv = keyVals; kv != NULL; kv = kv->next)
+    hashAdd(nameToVal, kv->name, kv->val);
+return nameToVal;
+}
+

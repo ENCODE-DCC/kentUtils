@@ -15,8 +15,9 @@
 #include "basicBed.h"
 #include "asParse.h"
 #include "bigBed.h"
+#include "encode3/encode3Valid.h"
 
-char *version = "4.6";
+char *version = "4.7";
 
 #define PEAK_WORDS 16
 #define TAG_WORDS 9
@@ -89,6 +90,8 @@ void usage()
   "       narrowPeak     These are specialized bedN+P formats.\n"
   "       gappedPeak     See http://genomewiki.cse.ucsc.edu/EncodeDCC/index.php/File_Formats\n"
   "       bedGraph    :  BED Graph\n"
+  "       rcc         :  NanoString RCC\n"
+  "       idat        :  Illumina IDAT\n"
   "\n"
   "   -as=fields.as                If you have extra \"bedPlus\" fields, it's great to put a definition\n"
   "                                of each field in a row in AutoSql format here. Applies to bed-related types.\n"
@@ -1108,7 +1111,6 @@ validateBed(lf, bedN, bedP, asObj);
 }
 
 
-
 // fasta:
 // >VHE-245683051005-13-1-2-1704
 // GTGTTAATTTTCTTGATCTTTCGTTC
@@ -1162,6 +1164,8 @@ while ( lineFileNext(lf, &seqName, NULL))
 	    startOfFile = FALSE;
 	}
     int len = 0;
+    if (seqName[0] == 0) // tolerate and skip blank leading lines
+	continue;
     if (!(checkSeqName(lf, seqName, '@', "sequence name")
 	&& (wantNewLine(lf, &seq, "fastq sequence line"))
 	&& (len = checkSeq(lf, seq, seq, "sequence"))
@@ -1669,6 +1673,18 @@ report("\n");
 }
 #endif
 
+void validateRcc(struct lineFile *lf)
+{
+verbose(2,"[%s %3d] file(%s)\n", __func__, __LINE__, lf->fileName);
+encode3ValidateRcc(lf->fileName);
+}
+
+void validateIdat(struct lineFile *lf)
+{
+verbose(2,"[%s %3d] file(%s)\n", __func__, __LINE__, lf->fileName);
+encode3ValidateIdat(lf->fileName);
+}
+
 
 void validateFiles(void (*validate)(struct lineFile *lf), int numFiles, char *files[])
 /* validateFile - validate format of different track input files. */
@@ -1815,6 +1831,10 @@ hashAdd(funcs, "bam",            &validateBAM);
 hashAdd(funcs, "bigWig",         &validateBigWig);
 
 hashAdd(funcs, "bedN",           &validateBedN);
+
+hashAdd(funcs, "rcc",            &validateRcc);
+
+hashAdd(funcs, "idat",           &validateIdat);
 
 //hashAdd(funcs, "test", &testFunc);
 if (!(func = hashFindVal(funcs, type)))

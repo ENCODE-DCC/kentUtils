@@ -21,7 +21,7 @@ endif
 BROWSER_LOADERS = makeDb/hgLoadBed makeDb/hgLoadWiggle makeDb/hgLoadMaf
 
 ifneq ($(findstring $(shell hostname),hgwdev hgwbeta),)
-    ENCODE_FILES =
+    ENCODE_FILES = encode3/encodeDataWarehouse
 endif
 
 
@@ -121,6 +121,7 @@ UTIL_DIRS = \
 	ctgFaToFa \
 	ctgToChromFa \
 	embossToPsl \
+	encode3 \
 	fakeFinContigs \
 	fakeOut \
 	ffaToFa \
@@ -218,7 +219,6 @@ APPS = $(UTIL_DIRS) $(UTILS_APPLIST)
 all::    cgi utils
 
 hgLib:
-	@./sqlEnvTest.sh
 	cd lib && ${MAKE}
 
 userApps: $(UTILS_APPLIST:%=%.userApp)
@@ -281,7 +281,17 @@ clean_utils::
 		(cd $${D} && ${MAKE} clean;) \
 	done
 
-test::	${TEST_DIRS:%=%.test}
+clean::	${TEST_DIRS:%=%.clean}
+
+%.clean:
+	cd $* && ${MAKE} clean
+
+testAll: $(APPS:%=%.testAll)
+
+%.testAll:
+	@test -s $*/tests/makefile && (echo $*; cd $* && $(MAKE) test) || true
+
+test::	${TEST_DIRS:%=%.test} testAll
 
 %.test: hgLib
 	cd $* && ${MAKE} test

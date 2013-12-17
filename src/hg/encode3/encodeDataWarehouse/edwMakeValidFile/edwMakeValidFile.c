@@ -19,6 +19,7 @@
 #include "gff.h"
 #include "encodeDataWarehouse.h"
 #include "edwLib.h"
+#include "fa.h"
 #include "encode3/encode3Valid.h"
 
 int maxErrCount = 1;	/* Set from command line. */
@@ -42,275 +43,42 @@ static struct optionSpec options[] = {
    {NULL, 0},
 };
 
-boolean maybeCopyFastqRecord(struct lineFile *lf, FILE *f, boolean copy, int *retSeqSize)
-/* Read next fastq record from LF, and optionally copy it to f.  Return FALSE at end of file 
- * Do a _little_ error checking on record while we're at it.  The format has already been
- * validated on the client side fairly thoroughly. */
-{
-char *line;
-int lineSize;
-
-/* Deal with initial line starting with '@' */
-if (!lineFileNext(lf, &line, &lineSize))
-    return FALSE;
-if (line[0] != '@')
-    errAbort("Expecting line starting with '@' got '%c' line %d of %s", line[0],
-	lf->lineIx, lf->fileName);
-if (copy)
-    mustWrite(f, line, lineSize);
-
-/* Deal with line containing sequence. */
-if (!lineFileNext(lf, &line, &lineSize))
-    errAbort("%s truncated in middle of record", lf->fileName);
-if (copy)
-    mustWrite(f, line, lineSize);
-int seqSize = lineSize-1;
-
-/* Deal with line containing just '+' that separates sequence from quality. */
-if (!lineFileNext(lf, &line, &lineSize))
-    errAbort("%s truncated in middle of record", lf->fileName);
-if (line[0] != '+')
-    errAbort("Expecting line starting with '+' got '%c' line %d of %s", line[0],
-	lf->lineIx, lf->fileName);
-if (copy)
-    mustWrite(f, line, lineSize);
-
-/* Deal with quality score line. */
-if (!lineFileNext(lf, &line, &lineSize))
-    errAbort("%s truncated in middle of record", lf->fileName);
-if (copy)
-    mustWrite(f, line, lineSize);
-int qualSize = lineSize-1;
-
-if (seqSize != qualSize)
-    errAbort("Sequence and quality size differ line %d and %d of %s", 
-	lf->lineIx-2, lf->lineIx, lf->fileName);
-
-*retSeqSize = seqSize;
-return TRUE;
-}
-
-void makeSampleOfFastq(char *source, FILE *f, int downStep, struct edwValidFile *vf)
-/* Sample every downStep items in source and write to dest. Count how many fastq
- * records and update vf fields with this. */
-{
-struct lineFile *lf = lineFileOpen(source, FALSE);
-boolean done = FALSE;
-while (!done)
-    {
-    int hotPosInCycle = rand()%downStep;
-    int cycle;
-    for (cycle=0; cycle<downStep; ++cycle)
-        {
-	boolean hotPos = (cycle == hotPosInCycle);
-	int seqSize;
-	if (!maybeCopyFastqRecord(lf, f, hotPos, &seqSize))
-	    {
-	    done = TRUE;
-	    break;
-	    }
-	vf->itemCount += 1;
-	vf->basesInItems += seqSize;
-	if (hotPos)
-	   {
-	   vf->sampleCount += 1;
-	   vf->basesInSample += seqSize;
-	   }
-	}
-    }
-lineFileClose(&lf);
-}
-
-void reduceFastqSample(char *source, FILE *f, int oldSize, int newSize, struct edwValidFile *vf)
-/* Copy newSize samples from source into open output f.  */
-{
-/* Make up an array that tells us which random parts of the source file to use. */
-assert(oldSize > newSize);
-char *randomizer = needMem(oldSize);
-memset(randomizer, TRUE, newSize);
-shuffleArrayOfChars(randomizer, oldSize);
-
-vf->basesInSample = 0;
-vf->sampleCount = 0;
-
-struct lineFile *lf = lineFileOpen(source, FALSE);
-int i;
-for (i=0; i<oldSize; ++i)
-    {
-    int seqSize;
-    boolean doIt = randomizer[i];
-    if (!maybeCopyFastqRecord(lf, f, doIt, &seqSize))
-         internalErr();
-    if (doIt)
-         {
-	 vf->basesInSample += seqSize;
-	 vf->sampleCount += 1;
-	 }
-
-    }
-freez(&randomizer);
-lineFileClose(&lf);
-}
-
-void systemWithCheck(char *command)
-/* Do a system call and abort with error if there's a problem. */
-{
-int err = system(command);
-if (err != 0)
-    errAbort("error executing: %s", command);
-}
-
-void scanSam(char *samIn, FILE *f, struct genomeRangeTree *grt, long long *retHit, 
-    long long *retMiss,  long long *retTotalBasesInHits)
-/* Scan through sam file doing several things:counting how many reads hit and how many 
- * miss target during mapping phase, copying those that hit to a little bed file, and 
- * also defining regions covered in a genomeRangeTree. */
-{
-samfile_t *sf = samopen(samIn, "r", NULL);
-bam_header_t *bamHeader = sf->header;
-bam1_t one;
-ZeroVar(&one);
-int err;
-long long hit = 0, miss = 0, totalBasesInHits = 0;
-while ((err = samread(sf, &one)) >= 0)
-    {
-    int32_t tid = one.core.tid;
-    if (tid < 0)
-	{
-	++miss;
-        continue;
-	}
-    ++hit;
-    char *chrom = bamHeader->target_name[tid];
-    // Approximate here... can do better if parse cigar.
-    int start = one.core.pos;
-    int size = one.core.l_qseq;
-    int end = start + size;	
-    totalBasesInHits += size;
-    boolean isRc = (one.core.flag & BAM_FREVERSE);
-    char strand = '+';
-    if (isRc)
-	{
-	strand = '-';
-	reverseIntRange(&start, &end, bamHeader->target_len[tid]);
-	}
-    if (start < 0) start=0;
-    fprintf(f, "%s\t%d\t%d\t.\t0\t%c\n", chrom, start, end, strand);
-    genomeRangeTreeAdd(grt, chrom, start, end);
-    }
-if (err < 0 && err != -1)
-    errnoAbort("samread err %d", err);
-samclose(sf);
-*retHit = hit;
-*retMiss = miss;
-*retTotalBasesInHits = totalBasesInHits;
-}
-
-static void rangeSummer(void *item, void *context)
-/* This is a callback for rbTreeTraverse with context.  It just adds up
- * end-start */
-{
-struct range *range = item;
-long long *pSum = context;
-*pSum += range->end - range->start;
-}
-
-long long rangeTreeSumRanges(struct rbTree *tree)
-/* Return sum of end-start of all items. */
-{
-long long sum = 0;
-rbTreeTraverseWithContext(tree, rangeSummer, &sum);
-return sum;
-}
-
-long long genomeRangeTreeSumRanges(struct genomeRangeTree *grt)
-/* Sum up all ranges in tree. */
-{
-long long sum = 0;
-struct hashEl *chrom, *chromList = hashElListHash(grt->hash);
-for (chrom = chromList; chrom != NULL; chrom = chrom->next)
-    rbTreeTraverseWithContext(chrom->val, rangeSummer, &sum);
-hashElFreeList(&chromList);
-return sum;
-}
-
 void alignFastqMakeBed(struct edwFile *ef, struct edwAssembly *assembly,
     char *fastqPath, struct edwValidFile *vf, FILE *bedF)
-/* Take a sample fastq and run bwa on it, and then convert that file to a bed. */
+/* Take a sample fastq and run bwa on it, and then convert that file to a bed. 
+ * Update vf->mapRatio and related fields. */
 {
-/* Hmm, tried doing this with Mark's pipeline code, but somehow it would be flaky the
- * second time it was run in same app.  Resorting therefore to temp files. */
-char genoFile[PATH_LEN];
-safef(genoFile, sizeof(genoFile), "%s%s/bwaData/%s.fa", 
-    edwValDataDir, vf->ucscDb, vf->ucscDb);
-
-char cmd[3*PATH_LEN];
-char *saiName = cloneString(rTempName(edwTempDir(), "edwSample1", ".sai"));
-safef(cmd, sizeof(cmd), "bwa aln %s %s > %s", genoFile, fastqPath, saiName);
-systemWithCheck(cmd);
-
-char *samName = cloneString(rTempName(edwTempDir(), "ewdSample1", ".sam"));
-safef(cmd, sizeof(cmd), "bwa samse %s %s %s > %s", genoFile, saiName, fastqPath, samName);
-systemWithCheck(cmd);
-remove(saiName);
-
-/* Scan sam file to calculate vf->mapRatio, vf->sampleCoverage and vf->depth. 
- * and also to produce little bed file for enrichment step. */
-struct genomeRangeTree *grt = genomeRangeTreeNew();
-long long hitCount=0, missCount=0, totalBasesInHits=0;
-scanSam(samName, bedF, grt, &hitCount, &missCount, &totalBasesInHits);
-verbose(1, "hitCount=%lld, missCount=%lld, totalBasesInHits=%lld, grt=%p\n", hitCount, missCount, totalBasesInHits, grt);
-vf->mapRatio = (double)hitCount/(hitCount+missCount);
-vf->depth = (double)totalBasesInHits/assembly->baseCount * (double)vf->itemCount/vf->sampleCount;
-long long basesHitBySample = genomeRangeTreeSumRanges(grt);
-vf->sampleCoverage = (double)basesHitBySample/assembly->baseCount;
-genomeRangeTreeFree(&grt);
-remove(samName);
+edwAlignFastqMakeBed(ef, assembly, fastqPath, vf, bedF, 
+    &vf->mapRatio, &vf->depth, &vf->sampleCoverage);
 }
 
-
-#define edwSampleReduction 40	    /* Initially sample ever Nth read where this defines N */
-#define edwSampleTargetSize 250000  /* We target this many samples */
 
 void makeValidFastq( struct sqlConnection *conn, char *path, struct edwFile *ef, 
 	struct edwAssembly *assembly, struct edwValidFile *vf)
 /* Fill out fields of vf.  Create sample subset. */
 {
-/* Make initial sample of fastq */
-char smallFastqName[PATH_LEN];
-safef(smallFastqName, PATH_LEN, "%sedwSampleFastqXXXXXX", edwTempDir());
-int smallFd = mkstemp(smallFastqName);
-FILE *smallF = fdopen(smallFd, "w");
-makeSampleOfFastq(path, smallF, edwSampleReduction, vf);
-carefulClose(&smallF);
+/* Make edwFastqFile record. */
+long long fileId = ef->id;
+edwMakeFastqStatsAndSample(conn, fileId);
+struct edwFastqFile *fqf = edwFastqFileFromFileId(conn, fileId);
+verbose(1, "Made sample fastq with %lld reads\n", fqf->sampleCount);
 
-/* We likely need to reduce this even further, down to 250k reads if possible. */
-char sampleFastqName[PATH_LEN];
-if (vf->sampleCount > edwSampleTargetSize)
-    {
-    safef(sampleFastqName, PATH_LEN, "%sedwSampleFastqXXXXXX", edwTempDir());
-    int fd = mkstemp(sampleFastqName);
-    FILE *f = fdopen(fd, "w");
-    reduceFastqSample(smallFastqName, f, vf->sampleCount, edwSampleTargetSize, vf);
-    carefulClose(&f);
-    remove(smallFastqName);
-    }
-else
-    strcpy(sampleFastqName, smallFastqName);
-
-verbose(1, "Made sample fastq with %lld reads\n", vf->sampleCount);
+/* Save some key pieces in vf. */
+vf->itemCount = fqf->readCount;
+vf->basesInItems = fqf->baseCount;
+vf->sampleCount = fqf->sampleCount;
+vf->basesInSample = fqf->basesInSample;
 
 /* Align fastq and turn results into bed. */
 char sampleBedName[PATH_LEN], temp[PATH_LEN];
 safef(sampleBedName, PATH_LEN, "%sedwSampleBedXXXXXX", edwTempDirForToday(temp));
 int bedFd = mkstemp(sampleBedName);
 FILE *bedF = fdopen(bedFd, "w");
-alignFastqMakeBed(ef, assembly, sampleFastqName, vf, bedF);
+alignFastqMakeBed(ef, assembly, fqf->sampleFileName, vf, bedF);
 carefulClose(&bedF);
-
-/* Save result in vf, clean up, go home. */
 vf->sampleBed = cloneString(sampleBedName);
-remove(sampleFastqName);
+
+edwFastqFileFree(&fqf);
 }
 
 #define TYPE_BAM  1
@@ -425,6 +193,8 @@ fprintf(f, "vf->sampleCoverage = %g\n", vf->sampleCoverage);
 fprintf(f, "vf->sampleCount = %g\n", vf->depth);
 }
 
+#define edwSampleReduction 40	    /* Initially sample ever Nth read where this defines N */
+
 void makeValidBam( struct sqlConnection *conn, char *path, struct edwFile *ef, 
 	struct edwAssembly *assembly, struct edwValidFile *vf)
 /* Fill out fields of vf based on bam.  Create sample subset as a little bed file. */
@@ -453,6 +223,22 @@ vf->mapRatio = 1.0;
 vf->sampleCoverage = 1.0;
 vf->depth = 1.0;
 twoBitClose(&tbf);
+}
+
+void makeValidFasta(struct sqlConnection *conn, char *path, struct edwFile *ef, 
+    struct edwValidFile *vf)
+/* Fill in info about fasta file */
+{
+struct lineFile *lf = lineFileOpen(path, FALSE);
+DNA *dna;
+int size;
+char *name;
+while (faSpeedReadNext(lf, &dna, &size, &name))
+    {
+    vf->basesInItems += size;
+    vf->itemCount += 1;
+    }
+lineFileClose(&lf);
 }
 
 void makeValidGtf(struct sqlConnection *conn, char *path, struct edwFile *ef, 
@@ -496,6 +282,19 @@ vf->mapRatio = 1.0;
 vf->depth = (double)totalSize/assembly->baseCount;
 gffFileFree(&gff);
 }
+
+void makeValidRcc(struct sqlConnection *conn, char *path, struct edwFile *ef, struct edwValidFile *vf)
+/* Fill in info about a nanostring RCC file. */
+{
+encode3ValidateRcc(path);
+}
+
+void makeValidIdat(struct sqlConnection *conn, char *path, struct edwFile *ef, struct edwValidFile *vf)
+/* Fill in info about a illumina idac file. */
+{
+encode3ValidateIdat(path);
+}
+
 
 static void needAssembly(struct edwFile *ef, char *format, struct edwAssembly *assembly)
 /* Require assembly tag be present. */
@@ -561,6 +360,8 @@ vf->replicate = findTagOrEmpty(tags, "replicate");
 vf->validKey = hashFindVal(tags->hash, "valid_key");
 vf->enrichedIn = findTagOrEmpty(tags, "enriched_in");
 vf->ucscDb = findTagOrEmpty(tags, "ucsc_db");
+vf->technicalReplicate = findTagOrEmpty(tags, "technical_replicate");
+vf->pairedEnd = findTagOrEmpty(tags, "paired_end");
 vf->sampleBed = "";
 
 if (vf->format && vf->validKey)	// We only can validate if we have something for format 
@@ -572,7 +373,7 @@ if (vf->format && vf->validKey)	// We only can validate if we have something for
 
     /* Look up assembly. */
     struct edwAssembly *assembly = NULL;
-    if (!isEmpty(vf->ucscDb))
+    if (!isEmpty(vf->ucscDb) && !sameString(vf->ucscDb, "unknown"))
 	{
 	char *ucscDb = vf->ucscDb;
 	char query[256];
@@ -588,37 +389,67 @@ if (vf->format && vf->validKey)	// We only can validate if we have something for
 
     /* And dispatch according to format. */
     char *format = vf->format;
+    char *suffix = edwFindDoubleFileSuffix(path);
+    char suffixBuf[128];
     if (sameString(format, "fastq"))
 	{
 	needAssembly(ef, format, assembly);
 	makeValidFastq(conn, path, ef, assembly, vf);
+	suffix = ".fastq.gz";
 	}
     else if (edwIsSupportedBigBedFormat(format))
 	{
 	needAssembly(ef, format, assembly);
 	makeValidBigBed(conn, path, ef, assembly, format, vf);
+	if (sameString(format, "bigBed"))
+	    suffix = ".bigBed";
+	else
+	    {
+	    safef(suffixBuf, sizeof(suffixBuf), ".%s.bigBed", format);
+	    suffix = suffixBuf;
+	    }
 	}
     else if (sameString(format, "bigWig"))
         {
 	needAssembly(ef, format, assembly);
 	makeValidBigWig(conn, path, ef, assembly, vf);
+	suffix = ".bigWig";
 	}
     else if (sameString(format, "bam"))
         {
 	needAssembly(ef, format, assembly);
 	makeValidBam(conn, path, ef, assembly, vf);
+	suffix = ".bam";
 	}
     else if (sameString(format, "2bit"))
         {
 	makeValid2Bit(conn, path, ef, vf);
+	suffix = ".2bit";
+	}
+    else if (sameString(format, "fasta"))
+        {
+	makeValidFasta(conn, path, ef, vf);
+	suffix = ".fasta.gz";
 	}
     else if (sameString(format, "gtf"))
         {
 	needAssembly(ef, format, assembly);
 	makeValidGtf(conn, path, ef, assembly, vf);
+	suffix = ".gtf.gz";
+	}
+    else if (sameString(format, "rcc"))
+        {
+	makeValidRcc(conn, path, ef, vf);
+	suffix = ".RCC";
+	}
+    else if (sameString(format, "idat"))
+        {
+	makeValidIdat(conn, path, ef, vf);
+	suffix = ".idat";
 	}
     else if (sameString(format, "unknown"))
         {
+	/* No specific validation needed for unknown format. */
 	}
     else
         {
@@ -644,7 +475,9 @@ if (vf->format && vf->validKey)	// We only can validate if we have something for
 		dirEnd = fileName;
 	    else
 		dirEnd += 1;
+#ifdef OLD
 	    char *suffix = edwFindDoubleFileSuffix(fileName);
+#endif /* OLD */
 	    dyStringAppendN(newName, fileName, dirEnd - fileName);
 	    dyStringAppend(newName, vf->licensePlate);
 	    dyStringAppend(newName, suffix);

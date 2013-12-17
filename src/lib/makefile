@@ -27,15 +27,16 @@ O = aliType.o annoAssembly.o annoFilter.o annoFormatter.o annoFormatTab.o \
     gapCalc.o gdf.o gemfont.o genomeRangeTree.o \
     gfNet.o gff.o gff3.o gfxPoly.o gifLabel.o \
     hacTree.o hash.o hex.o histogram.o hmmPfamParse.o hmmstats.o htmlPage.o htmshell.o \
-    https.o intExp.o intValTree.o internet.o itsa.o iupac.o \
-    jointalign.o jpegSize.o keys.o knetUdc.o kxTok.o linefile.o lineFileOnBigBed.o localmem.o log.o \
+    hmac.o https.o intExp.o intValTree.o internet.o itsa.o iupac.o \
+    jointalign.o jpegSize.o jsonParse.o \
+    keys.o knetUdc.o kxTok.o linefile.o lineFileOnBigBed.o localmem.o log.o \
     maf.o mafFromAxt.o mafScore.o mailViaPipe.o md5.o memalloc.o memgfx.o meta.o metaWig.o mgCircle.o \
     mgPolygon.o mime.o net.o nib.o nibTwo.o nt4.o numObscure.o \
     obscure.o oldGff.o oligoTm.o options.o osunix.o pairHmm.o paraFetch.o peakCluster.o \
     phyloTree.o pipeline.o portimpl.o pngwrite.o psGfx.o psPoly.o pscmGfx.o \
     psl.o pslGenoShow.o pslShow.o pslTbl.o pslTransMap.o pthreadWrap.o \
     qa.o quickHeap.o quotedP.o \
-    ra.o rainbow.o rbTree.o rangeTree.o regexHelper.o repMask.o \
+    ra.o rainbow.o raToStruct.o rbTree.o rangeTree.o regexHelper.o repMask.o \
     rle.o rnautil.o rqlEval.o rqlParse.o rudp.o \
     scoreWindow.o seg.o seqOut.o seqStats.o servBrcMcw.o servCrunx.o \
     servcis.o servcl.o servmsII.o servpws.o shaRes.o slog.o snof.o \

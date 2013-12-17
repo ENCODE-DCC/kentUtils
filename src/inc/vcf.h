@@ -186,6 +186,9 @@ switch (type)
 
 #define VCF_IGNORE_ERRS (INT_MAX - 1)
 
+struct vcfFile *vcfFileNew();
+/* Return a new, empty vcfFile object. */
+
 struct vcfFile *vcfFileMayOpen(char *fileOrUrl, int maxErr, int maxRecords, boolean parseAll);
 /* Open fileOrUrl and parse VCF header; return NULL if unable.
  * If parseAll, then read in all lines, parse and store in
@@ -239,6 +242,9 @@ unsigned int vcfRecordTrimIndelLeftBase(struct vcfRecord *rec);
  * However, for hgTracks' mapBox we need the correct chromStart for identifying the
  * record in hgc -- so return the original chromStart. */
 
+int vcfRecordCmp(const void *va, const void *vb);
+/* Compare to sort based on position. */
+
 void vcfFileFree(struct vcfFile **vcffPtr);
 /* Free a vcfFile object. */
 
@@ -271,8 +277,7 @@ char *vcfFilePooledStr(struct vcfFile *vcff, char *str);
 struct asObject *vcfAsObj();
 // Return asObject describing fields of VCF
 
-char *vcfGetSlashSepAllelesFromWords(char **words, struct dyString *dy,
-				     boolean *retSkippedFirstBase);
+char *vcfGetSlashSepAllelesFromWords(char **words, struct dyString *dy);
 /* Overwrite dy with a /-separated allele string from VCF words,
  * skipping the extra initial base that VCF requires for indel alleles if necessary.
  * Return dy->string for convenience. */

@@ -8,9 +8,13 @@ USE_DIRS = $(UTIL_DIRS) $(CGI_DIRS)
 
 UTIL_DIRS = \
     edwAddAssembly \
+    edwAddQaContamTarget \
     edwAddQaEnrichTarget \
     edwAddSubscriber \
+    edwChangeFormat \
+    edwCorrectFileTags \
     edwCreateUser \
+    edwMakeContaminationQa \
     edwMakeEnrichments \
     edwMakeReplicateQa \
     edwMakeValidFile \
@@ -20,23 +24,25 @@ UTIL_DIRS = \
 
 CGI_DIRS = \
     edwScriptSubmit \
+    edwScriptSubmitStatus \
     edwWebAuthLogin \
     edwWebAuthLogout \
     edwWebBrowse \
     edwWebCreateUser \
+    edwWebDeprecate \
     edwWebRegisterScript \
     edwWebSubmit
 
 TEST_DIRS = \
 	encode2BedDoctor 
 
-all:: edwLib utils
+all:: utils
 
 edwLib:
-	(cd lib && make)
+	(cd lib && ${MAKE})
 
 
-utils: $(USE_DIRS:%=%.utils)
+utils: edwLib $(UTIL_DIRS:%=%.utils)
 %.utils:
 	(cd $* && $(MAKE))
 
@@ -49,7 +55,10 @@ clean:: $(USE_DIRS:%=%.clean)
 %.clean:
 	(cd $* && ${MAKE} clean)
 
+cgi:: edwLib $(CGI_DIRS:%=%.cgi)
+%.cgi:
+	(cd $* && ${MAKE})
+
 alpha:: $(CGI_DIRS:%=%.alpha)
 %.alpha:
 	(cd $* && ${MAKE} alpha)
-

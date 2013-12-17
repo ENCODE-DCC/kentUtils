@@ -161,7 +161,8 @@ int tStart;
 bool multiple = (regionName != NULL);
 
 verbose(2, "%s:%d-%d", chrom, s, e);
-verbose(2, multiple ? "\t%s\n": "\n", regionName);
+if (multiple) verbose(2, "\t%s", regionName);
+verbose(2, "\n");
 for (el = list; el != NULL; el = el->next)
     {
     chain = el->val;
@@ -239,6 +240,8 @@ for (chain = chainsHit; chain != NULL; chain = next)
         errAbort("Chain mapping error: %s:%d-%d\n", chain->qName, start, end);
     if (chain->qStrand == '-')
 	strand = otherStrand(qStrand);
+    else
+       	strand = qStrand;
     if (useThick)
 	{
 	struct chain *subChain2 = NULL;

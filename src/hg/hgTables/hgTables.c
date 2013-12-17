@@ -879,8 +879,6 @@ if (track == NULL)
 	for (track = trackList; track != NULL; track = track->next)
 	    if (sameString(track->grp, group->name))
 	         break;
-	if (track == NULL)
-	    internalErr();
 	}
     }
 return track;
@@ -923,6 +921,9 @@ if ((groupList != NULL) && sameString(groupList->name, "user"))
 /* Add in groups from hubs. */
 for (group = slPopHead(pHubGrpList); group != NULL; group = slPopHead(pHubGrpList))
     {
+    // if the group isn't represented in any track, don't add it to list
+    if (!hashLookup(groupsInTrackList,group->name))
+	continue;
     /* check to see if we're inserting hubs rather than
      * adding them to the front of the list */
     if (addAfter != NULL)
@@ -937,7 +938,8 @@ for (group = slPopHead(pHubGrpList); group != NULL; group = slPopHead(pHubGrpLis
 
 /* Do some error checking for tracks with group names that are
  * not in database.  Just warn about them. */
-for (track = trackList; track != NULL; track = track->next)
+if (!trackHubDatabase(database))
+    for (track = trackList; track != NULL; track = track->next)
     {
     if (!hashLookup(groupsInDatabase, track->grp))
          warn("Track %s has group %s, which isn't in grp table",
@@ -1417,6 +1419,8 @@ if (isBigBed(database, table, curTrack, ctLookupName))
     fieldList = bigBedGetFields(table, conn);
     hFreeConn(&conn);
     }
+else if (isHalTable(table))
+    fieldList = getBedFields(6);
 else if (isBamTable(table))
     fieldList = bamGetFields(table);
 else if (isVcfTable(table))
@@ -1669,7 +1673,7 @@ if (track != NULL)
 	cartRemove(cart, "gvDisclaimer");
 	cartRemove(cart, hgtaDoTopSubmit);
 	cartSetString(cart, hgtaDoMainPage, "return to table browser");
-	dispatch(conn);
+	dispatch();
 	return;
 	}
     }
@@ -1728,6 +1732,8 @@ else if (sameString(output, outMaf))
     {
     if (doGalaxy() && !cgiOptionalString(hgtaDoGalaxyQuery))
         sendParamsToGalaxy(hgtaDoTopSubmit, "get output");
+    else if (isHalTable(table))
+        doHalMaf(track, table, conn);
     else
         doOutMaf(track, table, conn);
     }
@@ -1932,7 +1938,12 @@ fullTableToTdbHash = hashNew(0);
 rAddTablesToHash(fullTrackList, fullTableToTdbHash);
 curTrack = findSelectedTrack(fullTrackList, NULL, hgtaTrack);
 fullGroupList = makeGroupList(fullTrackList, &hubGrpList, allowAllTables());
-curGroup = findSelectedGroup(fullGroupList, hgtaGroup);
+
+// if there isn't a current track, then use the default group
+if (curTrack != NULL)
+    curGroup = findSelectedGroup(fullGroupList, hgtaGroup);
+else
+    curGroup = fullGroupList;
 if (sameString(curGroup->name, "allTables"))
     curTrack = NULL;
 curTable    = findSelectedTable(curTrack, hgtaTable);

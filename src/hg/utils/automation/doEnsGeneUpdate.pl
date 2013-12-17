@@ -195,9 +195,9 @@ sub doLoad {
   my $prevGenePred = "$previousBuildDir" . "/process/$db.allGenes.gp.gz";
   my $identicalToPrevious = 0;
   if ( -f $prevGenePred ) {
-      my $thisGenePredSum = `zcat $thisGenePred | sum`;
+      my $thisGenePredSum = `zcat $thisGenePred | sort | sum`;
       chomp $thisGenePredSum;
-      my $prevGenePredSum = `zcat $prevGenePred | sum`;
+      my $prevGenePredSum = `zcat $prevGenePred | sort | sum`;
       chomp $prevGenePredSum;
       print STDERR "prev: $prevGenePredSum, this: $thisGenePredSum\n";
       if ($prevGenePredSum eq $thisGenePredSum) {
@@ -476,6 +476,13 @@ _EOF_
       }
       $bossScript->add(<<_EOF_
 genePredCheck -db=$db $db.allGenes.gp.gz
+# construct bigBed and index for assembly hub
+mkdir -p bbi
+genePredToBed $db.allGenes.gp.gz stdout | sort -k1,1 -k2,2n > $db.ensGene.bed
+bedToBigBed -extraIndex=name $db.ensGene.bed ../../../chrom.sizes bbi/$db.ensGene.bb
+grep -v "^#" infoOut.txt | awk '{printf "%s\\t%s,%s,%s,%s,%s\\n", \$1,\$2,\$3,\$8,\$9,\$10}' > $db.ensGene.nameIndex.txt
+ixIxx $db.ensGene.nameIndex.txt $db.ensGene.name.ix $db.ensGene.name.ixx
+
 _EOF_
 	  );
   }
@@ -555,6 +562,14 @@ sub doMakeDoc {
   $updateTime =~ s/ .*//;	#	removes time
   my $organism = `hgsql -N -e 'select organism from dbDb where name = "$db";' hgcentraltest`;
   chomp $organism;
+  if (length($organism) < 1) {
+     if ( -s "$HgAutomate::clusterData/$db/species.name.txt" ) {
+        $organism = `cat $HgAutomate::clusterData/$db/species.name.txt`;
+        chomp $organism;
+     } else {
+        $organism = "species name not found";
+     }
+  }
 
   my $vegaOpt = "";
   my $trackName = "Ensembl";

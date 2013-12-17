@@ -5,6 +5,7 @@ include ../../inc/common.mk
 
 install:
 	@echo Reminder: is your sandbox up to date?
+	cp -p --remove-destination 2bitCompare             ${SCRIPTS}
 	cp -p --remove-destination activeGenbank.csh       ${SCRIPTS}
 	cp -p --remove-destination alertBqueue.csh         ${SCRIPTS}
 	cp -p --remove-destination allowTraffic.csh        ${SCRIPTS}
@@ -47,6 +48,7 @@ install:
 	cp -p --remove-destination compareWholeColumn.csh  ${SCRIPTS}
 	cp -p --remove-destination compareWholeTable.csh   ${SCRIPTS}
 	cp -p --remove-destination copyExtSeqRows.csh      ${SCRIPTS}
+	cp -p --remove-destination copyHgcentral           ${SCRIPTS}
 	cp -p --remove-destination countPerChrom.csh       ${SCRIPTS}
 	cp -p --remove-destination countRows.csh           ${SCRIPTS}
 	cp -p --remove-destination cronLinks.csh           ${SCRIPTS}
@@ -126,7 +128,6 @@ install:
 	cp -p --remove-destination showProcesslist.csh     ${SCRIPTS}
 	cp -p --remove-destination staticpaths             ${SCRIPTS}
 	cp -p --remove-destination syncAday.csh            ${SCRIPTS}
-	cp -p --remove-destination tableDumpDates.csh      ${SCRIPTS}
 	cp -p --remove-destination trackDbGlobal.csh       ${SCRIPTS}
 	cp -p --remove-destination updateTimes.csh         ${SCRIPTS}
 	cp -p --remove-destination updateTimesDb.csh       ${SCRIPTS}

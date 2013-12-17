@@ -17,7 +17,7 @@ if [ "x${VERSION}y" = "xy" ]; then
     exit 255
 fi
 
-
+if [ 0 = 1 ]; then
 echo "Scanning for GTF file names"
 
 echo "user anonymous hiram@soe
@@ -27,13 +27,14 @@ bye" > ftp.rsp
 
 ftp -n -v -i ftp.ensembl.org < ftp.rsp > release.${VERSION}.gtf.ls-lR
 
-awk '
+egrep -v "CHECKSUMS|README" release.${VERSION}.gtf.ls-lR | awk '
 {
-if (match($1,"^./")) {gsub("^./","",$1); gsub(":$","",$1); printf "%s/", $1 }
+if (match($1,"^[a-z_]*:$")) {gsub(":$","",$1); printf "%s/", $1 }
 if (NF == 9) { if (match($1,"^-rw")) {printf "%s\n", $NF} }
 }
-' release.${VERSION}.gtf.ls-lR \
-    | sed -e "s#^#'x' => '#; s#\$#',#" > release.${VERSION}.gtf.names
+' | sed -e "s#^#'x' => '#; s#\$#',#" > release.${VERSION}.gtf.names
+
+exit $?
 
 echo "Scanning for MySQL table files"
 
@@ -44,6 +45,11 @@ bye" > ftp.rsp
 
 ftp -i -n -v ftp.ensembl.org < ftp.rsp > release.${VERSION}.MySQL.ls-lR
 
+egrep "_core_${VERSION}.*:$" release.${VERSION}.MySQL.ls-lR \
+  | sed -e 's/://;' | sed -e "s#^#'x' => '#; s#\$#',#" \
+     > release.${VERSION}.MySQL.names
+
+if [ 0 = 1 ]; then
 awk '
 BEGIN{ D="notYet" }
 {
@@ -56,6 +62,10 @@ BEGIN{ D="notYet" }
 }
 ' release.${VERSION}.MySQL.ls-lR \
 	| sed -e "s#^#'x' => '#; s#\$#',#" > release.${VERSION}.MySQL.names
+
+fi
+
+fi
 
 echo "Scanning for protein fasta files:"
 
@@ -70,8 +80,8 @@ awk '
 BEGIN{ D="notYet" }
 {
   if (!match($1,"^d")) {
-    if (match($1,"^./")) {
-        gsub("^./","",$1); gsub(":$","",$1); D = $1;
+    if (match($1,"^[a-z_]*/pep:$")) {
+        gsub(":$","",$1); D = $1;
     }
     if ((9 == NF) && match($1,"^-rw") && match($NF,"pep.all.fa")) {
         printf "%s/%s\n", D, $NF

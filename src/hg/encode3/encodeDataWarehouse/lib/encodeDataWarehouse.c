@@ -48,7 +48,7 @@ void edwUserSaveToDb(struct sqlConnection *conn, struct edwUser *el, char *table
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,'%s')", 
@@ -56,7 +56,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,'%s')",
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwUser *edwUserLoad(char **row)
 /* Load a edwUser from row fetched with select * from edwUser
@@ -199,7 +198,7 @@ void edwScriptRegistrySaveToDb(struct sqlConnection *conn, struct edwScriptRegis
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,%u,'%s','%s','%s',%d)", 
@@ -207,7 +206,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,%u,'%s','%s','%s',%d)",
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwScriptRegistry *edwScriptRegistryLoad(char **row)
 /* Load a edwScriptRegistry from row fetched with select * from edwScriptRegistry
@@ -376,7 +374,7 @@ void edwHostSaveToDb(struct sqlConnection *conn, struct edwHost *el, char *table
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%lld,%lld,%lld,'%s',%lld,%lld,%lld,%d)", 
@@ -384,7 +382,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%lld,%lld,%lld,'%s',%
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwHost *edwHostLoad(char **row)
 /* Load a edwHost from row fetched with select * from edwHost
@@ -566,7 +563,7 @@ void edwSubmitDirSaveToDb(struct sqlConnection *conn, struct edwSubmitDir *el, c
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%u,%lld,%lld,%lld,'%s',%lld,%lld,%lld)", 
@@ -574,7 +571,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%u,%lld,%lld,%lld,'%s
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwSubmitDir *edwSubmitDirLoad(char **row)
 /* Load a edwSubmitDir from row fetched with select * from edwSubmitDir
@@ -730,7 +726,7 @@ safecpy(ret->md5, sizeof(ret->md5), row[9]);
 ret->tags = row[10];
 ret->errorMessage = row[11];
 ret->deprecated = row[12];
-ret->replacedBy = row[13];
+ret->replacedBy = sqlUnsigned(row[13]);
 }
 
 struct edwFile *edwFileLoadByQuery(struct sqlConnection *conn, char *query)
@@ -760,15 +756,14 @@ void edwFileSaveToDb(struct sqlConnection *conn, struct edwFile *el, char *table
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
-sqlDyStringPrintf(update, "insert into %s values ( %u,%u,%u,'%s','%s',%lld,%lld,%lld,%lld,'%s','%s','%s','%s','%s')", 
+sqlDyStringPrintf(update, "insert into %s values ( %u,%u,%u,'%s','%s',%lld,%lld,%lld,%lld,'%s','%s','%s','%s',%u)", 
 	tableName,  el->id,  el->submitId,  el->submitDirId,  el->submitFileName,  el->edwFileName,  el->startUploadTime,  el->endUploadTime,  el->updateTime,  el->size,  el->md5,  el->tags,  el->errorMessage,  el->deprecated,  el->replacedBy);
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwFile *edwFileLoad(char **row)
 /* Load a edwFile from row fetched with select * from edwFile
@@ -790,7 +785,7 @@ safecpy(ret->md5, sizeof(ret->md5), row[9]);
 ret->tags = cloneString(row[10]);
 ret->errorMessage = cloneString(row[11]);
 ret->deprecated = cloneString(row[12]);
-ret->replacedBy = cloneString(row[13]);
+ret->replacedBy = sqlUnsigned(row[13]);
 return ret;
 }
 
@@ -852,7 +847,7 @@ sqlFixedStringComma(&s, ret->md5, sizeof(ret->md5));
 ret->tags = sqlStringComma(&s);
 ret->errorMessage = sqlStringComma(&s);
 ret->deprecated = sqlStringComma(&s);
-ret->replacedBy = sqlStringComma(&s);
+ret->replacedBy = sqlUnsignedComma(&s);
 *pS = s;
 return ret;
 }
@@ -869,7 +864,6 @@ freeMem(el->edwFileName);
 freeMem(el->tags);
 freeMem(el->errorMessage);
 freeMem(el->deprecated);
-freeMem(el->replacedBy);
 freez(pEl);
 }
 
@@ -927,14 +921,12 @@ if (sep == ',') fputc('"',f);
 fprintf(f, "%s", el->deprecated);
 if (sep == ',') fputc('"',f);
 fputc(sep,f);
-if (sep == ',') fputc('"',f);
-fprintf(f, "%s", el->replacedBy);
-if (sep == ',') fputc('"',f);
+fprintf(f, "%u", el->replacedBy);
 fputc(lastSep,f);
 }
 
 
-char *edwSubmitCommaSepFieldNames = "id,url,startUploadTime,endUploadTime,userId,submitFileId,submitDirId,fileCount,oldFiles,newFiles,byteCount,oldBytes,newBytes,errorMessage,fileIdInTransit";
+char *edwSubmitCommaSepFieldNames = "id,url,startUploadTime,endUploadTime,userId,submitFileId,submitDirId,fileCount,oldFiles,newFiles,byteCount,oldBytes,newBytes,errorMessage,fileIdInTransit,metaChangeCount";
 
 void edwSubmitStaticLoad(char **row, struct edwSubmit *ret)
 /* Load a row from edwSubmit table into ret.  The contents of ret will
@@ -956,6 +948,7 @@ ret->oldBytes = sqlLongLong(row[11]);
 ret->newBytes = sqlLongLong(row[12]);
 ret->errorMessage = row[13];
 ret->fileIdInTransit = sqlUnsigned(row[14]);
+ret->metaChangeCount = sqlUnsigned(row[15]);
 }
 
 struct edwSubmit *edwSubmitLoadByQuery(struct sqlConnection *conn, char *query)
@@ -985,15 +978,14 @@ void edwSubmitSaveToDb(struct sqlConnection *conn, struct edwSubmit *el, char *t
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
-sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%lld,%lld,%u,%u,%u,%u,%u,%u,%lld,%lld,%lld,'%s',%u)", 
-	tableName,  el->id,  el->url,  el->startUploadTime,  el->endUploadTime,  el->userId,  el->submitFileId,  el->submitDirId,  el->fileCount,  el->oldFiles,  el->newFiles,  el->byteCount,  el->oldBytes,  el->newBytes,  el->errorMessage,  el->fileIdInTransit);
+sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%lld,%lld,%u,%u,%u,%u,%u,%u,%lld,%lld,%lld,'%s',%u,%u)", 
+	tableName,  el->id,  el->url,  el->startUploadTime,  el->endUploadTime,  el->userId,  el->submitFileId,  el->submitDirId,  el->fileCount,  el->oldFiles,  el->newFiles,  el->byteCount,  el->oldBytes,  el->newBytes,  el->errorMessage,  el->fileIdInTransit,  el->metaChangeCount);
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwSubmit *edwSubmitLoad(char **row)
 /* Load a edwSubmit from row fetched with select * from edwSubmit
@@ -1017,6 +1009,7 @@ ret->oldBytes = sqlLongLong(row[11]);
 ret->newBytes = sqlLongLong(row[12]);
 ret->errorMessage = cloneString(row[13]);
 ret->fileIdInTransit = sqlUnsigned(row[14]);
+ret->metaChangeCount = sqlUnsigned(row[15]);
 return ret;
 }
 
@@ -1026,7 +1019,7 @@ struct edwSubmit *edwSubmitLoadAll(char *fileName)
 {
 struct edwSubmit *list = NULL, *el;
 struct lineFile *lf = lineFileOpen(fileName, TRUE);
-char *row[15];
+char *row[16];
 
 while (lineFileRow(lf, row))
     {
@@ -1044,7 +1037,7 @@ struct edwSubmit *edwSubmitLoadAllByChar(char *fileName, char chopper)
 {
 struct edwSubmit *list = NULL, *el;
 struct lineFile *lf = lineFileOpen(fileName, TRUE);
-char *row[15];
+char *row[16];
 
 while (lineFileNextCharRow(lf, chopper, row, ArraySize(row)))
     {
@@ -1080,6 +1073,7 @@ ret->oldBytes = sqlLongLongComma(&s);
 ret->newBytes = sqlLongLongComma(&s);
 ret->errorMessage = sqlStringComma(&s);
 ret->fileIdInTransit = sqlUnsignedComma(&s);
+ret->metaChangeCount = sqlUnsignedComma(&s);
 *pS = s;
 return ret;
 }
@@ -1145,6 +1139,8 @@ fprintf(f, "%s", el->errorMessage);
 if (sep == ',') fputc('"',f);
 fputc(sep,f);
 fprintf(f, "%u", el->fileIdInTransit);
+fputc(sep,f);
+fprintf(f, "%u", el->metaChangeCount);
 fputc(lastSep,f);
 }
 
@@ -1192,7 +1188,7 @@ void edwSubscriberSaveToDb(struct sqlConnection *conn, struct edwSubscriber *el,
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%g,'%s','%s','%s','%s')", 
@@ -1200,7 +1196,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%g,'%s','%s','%s','%s
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwSubscriber *edwSubscriberLoad(char **row)
 /* Load a edwSubscriber from row fetched with select * from edwSubscriber
@@ -1376,7 +1371,7 @@ void edwAssemblySaveToDb(struct sqlConnection *conn, struct edwAssembly *el, cha
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,%u,'%s','%s',%u,%lld,%lld)", 
@@ -1384,7 +1379,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,%u,'%s','%s',%u,%lld,%lld)
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwAssembly *edwAssemblyLoad(char **row)
 /* Load a edwAssembly from row fetched with select * from edwAssembly
@@ -1508,7 +1502,7 @@ fputc(lastSep,f);
 }
 
 
-char *edwValidFileCommaSepFieldNames = "id,licensePlate,fileId,format,outputType,experiment,replicate,validKey,enrichedIn,ucscDb,itemCount,basesInItems,sampleCount,basesInSample,sampleBed,mapRatio,sampleCoverage,depth";
+char *edwValidFileCommaSepFieldNames = "id,licensePlate,fileId,format,outputType,experiment,replicate,validKey,enrichedIn,ucscDb,itemCount,basesInItems,sampleCount,basesInSample,sampleBed,mapRatio,sampleCoverage,depth,singleQaStatus,replicateQaStatus,technicalReplicate,pairedEnd";
 
 void edwValidFileStaticLoad(char **row, struct edwValidFile *ret)
 /* Load a row from edwValidFile table into ret.  The contents of ret will
@@ -1533,6 +1527,10 @@ ret->sampleBed = row[14];
 ret->mapRatio = sqlDouble(row[15]);
 ret->sampleCoverage = sqlDouble(row[16]);
 ret->depth = sqlDouble(row[17]);
+ret->singleQaStatus = sqlSigned(row[18]);
+ret->replicateQaStatus = sqlSigned(row[19]);
+ret->technicalReplicate = row[20];
+ret->pairedEnd = row[21];
 }
 
 struct edwValidFile *edwValidFileLoadByQuery(struct sqlConnection *conn, char *query)
@@ -1562,15 +1560,14 @@ void edwValidFileSaveToDb(struct sqlConnection *conn, struct edwValidFile *el, c
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
-sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%u,'%s','%s','%s','%s','%s','%s','%s',%lld,%lld,%lld,%lld,'%s',%g,%g,%g)", 
-	tableName,  el->id,  el->licensePlate,  el->fileId,  el->format,  el->outputType,  el->experiment,  el->replicate,  el->validKey,  el->enrichedIn,  el->ucscDb,  el->itemCount,  el->basesInItems,  el->sampleCount,  el->basesInSample,  el->sampleBed,  el->mapRatio,  el->sampleCoverage,  el->depth);
+sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%u,'%s','%s','%s','%s','%s','%s','%s',%lld,%lld,%lld,%lld,'%s',%g,%g,%g,%d,%d,'%s','%s')", 
+	tableName,  el->id,  el->licensePlate,  el->fileId,  el->format,  el->outputType,  el->experiment,  el->replicate,  el->validKey,  el->enrichedIn,  el->ucscDb,  el->itemCount,  el->basesInItems,  el->sampleCount,  el->basesInSample,  el->sampleBed,  el->mapRatio,  el->sampleCoverage,  el->depth,  el->singleQaStatus,  el->replicateQaStatus,  el->technicalReplicate,  el->pairedEnd);
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwValidFile *edwValidFileLoad(char **row)
 /* Load a edwValidFile from row fetched with select * from edwValidFile
@@ -1597,6 +1594,10 @@ ret->sampleBed = cloneString(row[14]);
 ret->mapRatio = sqlDouble(row[15]);
 ret->sampleCoverage = sqlDouble(row[16]);
 ret->depth = sqlDouble(row[17]);
+ret->singleQaStatus = sqlSigned(row[18]);
+ret->replicateQaStatus = sqlSigned(row[19]);
+ret->technicalReplicate = cloneString(row[20]);
+ret->pairedEnd = cloneString(row[21]);
 return ret;
 }
 
@@ -1606,7 +1607,7 @@ struct edwValidFile *edwValidFileLoadAll(char *fileName)
 {
 struct edwValidFile *list = NULL, *el;
 struct lineFile *lf = lineFileOpen(fileName, TRUE);
-char *row[18];
+char *row[22];
 
 while (lineFileRow(lf, row))
     {
@@ -1624,7 +1625,7 @@ struct edwValidFile *edwValidFileLoadAllByChar(char *fileName, char chopper)
 {
 struct edwValidFile *list = NULL, *el;
 struct lineFile *lf = lineFileOpen(fileName, TRUE);
-char *row[18];
+char *row[22];
 
 while (lineFileNextCharRow(lf, chopper, row, ArraySize(row)))
     {
@@ -1663,6 +1664,10 @@ ret->sampleBed = sqlStringComma(&s);
 ret->mapRatio = sqlDoubleComma(&s);
 ret->sampleCoverage = sqlDoubleComma(&s);
 ret->depth = sqlDoubleComma(&s);
+ret->singleQaStatus = sqlSignedComma(&s);
+ret->replicateQaStatus = sqlSignedComma(&s);
+ret->technicalReplicate = sqlStringComma(&s);
+ret->pairedEnd = sqlStringComma(&s);
 *pS = s;
 return ret;
 }
@@ -1682,6 +1687,8 @@ freeMem(el->validKey);
 freeMem(el->enrichedIn);
 freeMem(el->ucscDb);
 freeMem(el->sampleBed);
+freeMem(el->technicalReplicate);
+freeMem(el->pairedEnd);
 freez(pEl);
 }
 
@@ -1754,6 +1761,423 @@ fputc(sep,f);
 fprintf(f, "%g", el->sampleCoverage);
 fputc(sep,f);
 fprintf(f, "%g", el->depth);
+fputc(sep,f);
+fprintf(f, "%d", el->singleQaStatus);
+fputc(sep,f);
+fprintf(f, "%d", el->replicateQaStatus);
+fputc(sep,f);
+if (sep == ',') fputc('"',f);
+fprintf(f, "%s", el->technicalReplicate);
+if (sep == ',') fputc('"',f);
+fputc(sep,f);
+if (sep == ',') fputc('"',f);
+fprintf(f, "%s", el->pairedEnd);
+if (sep == ',') fputc('"',f);
+fputc(lastSep,f);
+}
+
+
+char *edwFastqFileCommaSepFieldNames = "id,fileId,sampleCount,basesInSample,sampleFileName,readCount,baseCount,readSizeMean,readSizeStd,readSizeMin,readSizeMax,qualMean,qualStd,qualMin,qualMax,qualType,qualZero,atRatio,aRatio,cRatio,gRatio,tRatio,nRatio,qualPos,aAtPos,cAtPos,gAtPos,tAtPos,nAtPos";
+
+struct edwFastqFile *edwFastqFileLoadByQuery(struct sqlConnection *conn, char *query)
+/* Load all edwFastqFile from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwFastqFileFreeList(). */
+{
+struct edwFastqFile *list = NULL, *el;
+struct sqlResult *sr;
+char **row;
+
+sr = sqlGetResult(conn, query);
+while ((row = sqlNextRow(sr)) != NULL)
+    {
+    el = edwFastqFileLoad(row);
+    slAddHead(&list, el);
+    }
+slReverse(&list);
+sqlFreeResult(&sr);
+return list;
+}
+
+void edwFastqFileSaveToDb(struct sqlConnection *conn, struct edwFastqFile *el, char *tableName, int updateSize)
+/* Save edwFastqFile as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+{
+struct dyString *update = newDyString(updateSize);
+char  *qualPosArray, *aAtPosArray, *cAtPosArray, *gAtPosArray, *tAtPosArray, *nAtPosArray;
+qualPosArray = sqlDoubleArrayToString(el->qualPos, el->readSizeMax);
+aAtPosArray = sqlDoubleArrayToString(el->aAtPos, el->readSizeMax);
+cAtPosArray = sqlDoubleArrayToString(el->cAtPos, el->readSizeMax);
+gAtPosArray = sqlDoubleArrayToString(el->gAtPos, el->readSizeMax);
+tAtPosArray = sqlDoubleArrayToString(el->tAtPos, el->readSizeMax);
+nAtPosArray = sqlDoubleArrayToString(el->nAtPos, el->readSizeMax);
+sqlDyStringPrintf(update, "insert into %s values ( %u,%u,%lld,%lld,'%s',%lld,%lld,%g,%g,%d,%d,%g,%g,%g,%g,'%s',%d,%g,%g,%g,%g,%g,%g,'%s','%s','%s','%s','%s','%s')", 
+	tableName,  el->id,  el->fileId,  el->sampleCount,  el->basesInSample,  el->sampleFileName,  el->readCount,  el->baseCount,  el->readSizeMean,  el->readSizeStd,  el->readSizeMin,  el->readSizeMax,  el->qualMean,  el->qualStd,  el->qualMin,  el->qualMax,  el->qualType,  el->qualZero,  el->atRatio,  el->aRatio,  el->cRatio,  el->gRatio,  el->tRatio,  el->nRatio,  qualPosArray ,  aAtPosArray ,  cAtPosArray ,  gAtPosArray ,  tAtPosArray ,  nAtPosArray );
+sqlUpdate(conn, update->string);
+freeDyString(&update);
+freez(&qualPosArray);
+freez(&aAtPosArray);
+freez(&cAtPosArray);
+freez(&gAtPosArray);
+freez(&tAtPosArray);
+freez(&nAtPosArray);
+}
+
+struct edwFastqFile *edwFastqFileLoad(char **row)
+/* Load a edwFastqFile from row fetched with select * from edwFastqFile
+ * from database.  Dispose of this with edwFastqFileFree(). */
+{
+struct edwFastqFile *ret;
+
+AllocVar(ret);
+ret->readSizeMax = sqlSigned(row[10]);
+ret->id = sqlUnsigned(row[0]);
+ret->fileId = sqlUnsigned(row[1]);
+ret->sampleCount = sqlLongLong(row[2]);
+ret->basesInSample = sqlLongLong(row[3]);
+ret->sampleFileName = cloneString(row[4]);
+ret->readCount = sqlLongLong(row[5]);
+ret->baseCount = sqlLongLong(row[6]);
+ret->readSizeMean = sqlDouble(row[7]);
+ret->readSizeStd = sqlDouble(row[8]);
+ret->readSizeMin = sqlSigned(row[9]);
+ret->qualMean = sqlDouble(row[11]);
+ret->qualStd = sqlDouble(row[12]);
+ret->qualMin = sqlDouble(row[13]);
+ret->qualMax = sqlDouble(row[14]);
+ret->qualType = cloneString(row[15]);
+ret->qualZero = sqlSigned(row[16]);
+ret->atRatio = sqlDouble(row[17]);
+ret->aRatio = sqlDouble(row[18]);
+ret->cRatio = sqlDouble(row[19]);
+ret->gRatio = sqlDouble(row[20]);
+ret->tRatio = sqlDouble(row[21]);
+ret->nRatio = sqlDouble(row[22]);
+{
+int sizeOne;
+sqlDoubleDynamicArray(row[23], &ret->qualPos, &sizeOne);
+assert(sizeOne == ret->readSizeMax);
+}
+{
+int sizeOne;
+sqlDoubleDynamicArray(row[24], &ret->aAtPos, &sizeOne);
+assert(sizeOne == ret->readSizeMax);
+}
+{
+int sizeOne;
+sqlDoubleDynamicArray(row[25], &ret->cAtPos, &sizeOne);
+assert(sizeOne == ret->readSizeMax);
+}
+{
+int sizeOne;
+sqlDoubleDynamicArray(row[26], &ret->gAtPos, &sizeOne);
+assert(sizeOne == ret->readSizeMax);
+}
+{
+int sizeOne;
+sqlDoubleDynamicArray(row[27], &ret->tAtPos, &sizeOne);
+assert(sizeOne == ret->readSizeMax);
+}
+{
+int sizeOne;
+sqlDoubleDynamicArray(row[28], &ret->nAtPos, &sizeOne);
+assert(sizeOne == ret->readSizeMax);
+}
+return ret;
+}
+
+struct edwFastqFile *edwFastqFileLoadAll(char *fileName) 
+/* Load all edwFastqFile from a whitespace-separated file.
+ * Dispose of this with edwFastqFileFreeList(). */
+{
+struct edwFastqFile *list = NULL, *el;
+struct lineFile *lf = lineFileOpen(fileName, TRUE);
+char *row[29];
+
+while (lineFileRow(lf, row))
+    {
+    el = edwFastqFileLoad(row);
+    slAddHead(&list, el);
+    }
+lineFileClose(&lf);
+slReverse(&list);
+return list;
+}
+
+struct edwFastqFile *edwFastqFileLoadAllByChar(char *fileName, char chopper) 
+/* Load all edwFastqFile from a chopper separated file.
+ * Dispose of this with edwFastqFileFreeList(). */
+{
+struct edwFastqFile *list = NULL, *el;
+struct lineFile *lf = lineFileOpen(fileName, TRUE);
+char *row[29];
+
+while (lineFileNextCharRow(lf, chopper, row, ArraySize(row)))
+    {
+    el = edwFastqFileLoad(row);
+    slAddHead(&list, el);
+    }
+lineFileClose(&lf);
+slReverse(&list);
+return list;
+}
+
+struct edwFastqFile *edwFastqFileCommaIn(char **pS, struct edwFastqFile *ret)
+/* Create a edwFastqFile out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwFastqFile */
+{
+char *s = *pS;
+
+if (ret == NULL)
+    AllocVar(ret);
+ret->id = sqlUnsignedComma(&s);
+ret->fileId = sqlUnsignedComma(&s);
+ret->sampleCount = sqlLongLongComma(&s);
+ret->basesInSample = sqlLongLongComma(&s);
+ret->sampleFileName = sqlStringComma(&s);
+ret->readCount = sqlLongLongComma(&s);
+ret->baseCount = sqlLongLongComma(&s);
+ret->readSizeMean = sqlDoubleComma(&s);
+ret->readSizeStd = sqlDoubleComma(&s);
+ret->readSizeMin = sqlSignedComma(&s);
+ret->readSizeMax = sqlSignedComma(&s);
+ret->qualMean = sqlDoubleComma(&s);
+ret->qualStd = sqlDoubleComma(&s);
+ret->qualMin = sqlDoubleComma(&s);
+ret->qualMax = sqlDoubleComma(&s);
+ret->qualType = sqlStringComma(&s);
+ret->qualZero = sqlSignedComma(&s);
+ret->atRatio = sqlDoubleComma(&s);
+ret->aRatio = sqlDoubleComma(&s);
+ret->cRatio = sqlDoubleComma(&s);
+ret->gRatio = sqlDoubleComma(&s);
+ret->tRatio = sqlDoubleComma(&s);
+ret->nRatio = sqlDoubleComma(&s);
+{
+int i;
+s = sqlEatChar(s, '{');
+AllocArray(ret->qualPos, ret->readSizeMax);
+for (i=0; i<ret->readSizeMax; ++i)
+    {
+    ret->qualPos[i] = sqlDoubleComma(&s);
+    }
+s = sqlEatChar(s, '}');
+s = sqlEatChar(s, ',');
+}
+{
+int i;
+s = sqlEatChar(s, '{');
+AllocArray(ret->aAtPos, ret->readSizeMax);
+for (i=0; i<ret->readSizeMax; ++i)
+    {
+    ret->aAtPos[i] = sqlDoubleComma(&s);
+    }
+s = sqlEatChar(s, '}');
+s = sqlEatChar(s, ',');
+}
+{
+int i;
+s = sqlEatChar(s, '{');
+AllocArray(ret->cAtPos, ret->readSizeMax);
+for (i=0; i<ret->readSizeMax; ++i)
+    {
+    ret->cAtPos[i] = sqlDoubleComma(&s);
+    }
+s = sqlEatChar(s, '}');
+s = sqlEatChar(s, ',');
+}
+{
+int i;
+s = sqlEatChar(s, '{');
+AllocArray(ret->gAtPos, ret->readSizeMax);
+for (i=0; i<ret->readSizeMax; ++i)
+    {
+    ret->gAtPos[i] = sqlDoubleComma(&s);
+    }
+s = sqlEatChar(s, '}');
+s = sqlEatChar(s, ',');
+}
+{
+int i;
+s = sqlEatChar(s, '{');
+AllocArray(ret->tAtPos, ret->readSizeMax);
+for (i=0; i<ret->readSizeMax; ++i)
+    {
+    ret->tAtPos[i] = sqlDoubleComma(&s);
+    }
+s = sqlEatChar(s, '}');
+s = sqlEatChar(s, ',');
+}
+{
+int i;
+s = sqlEatChar(s, '{');
+AllocArray(ret->nAtPos, ret->readSizeMax);
+for (i=0; i<ret->readSizeMax; ++i)
+    {
+    ret->nAtPos[i] = sqlDoubleComma(&s);
+    }
+s = sqlEatChar(s, '}');
+s = sqlEatChar(s, ',');
+}
+*pS = s;
+return ret;
+}
+
+void edwFastqFileFree(struct edwFastqFile **pEl)
+/* Free a single dynamically allocated edwFastqFile such as created
+ * with edwFastqFileLoad(). */
+{
+struct edwFastqFile *el;
+
+if ((el = *pEl) == NULL) return;
+freeMem(el->sampleFileName);
+freeMem(el->qualType);
+freeMem(el->qualPos);
+freeMem(el->aAtPos);
+freeMem(el->cAtPos);
+freeMem(el->gAtPos);
+freeMem(el->tAtPos);
+freeMem(el->nAtPos);
+freez(pEl);
+}
+
+void edwFastqFileFreeList(struct edwFastqFile **pList)
+/* Free a list of dynamically allocated edwFastqFile's */
+{
+struct edwFastqFile *el, *next;
+
+for (el = *pList; el != NULL; el = next)
+    {
+    next = el->next;
+    edwFastqFileFree(&el);
+    }
+*pList = NULL;
+}
+
+void edwFastqFileOutput(struct edwFastqFile *el, FILE *f, char sep, char lastSep) 
+/* Print out edwFastqFile.  Separate fields with sep. Follow last field with lastSep. */
+{
+fprintf(f, "%u", el->id);
+fputc(sep,f);
+fprintf(f, "%u", el->fileId);
+fputc(sep,f);
+fprintf(f, "%lld", el->sampleCount);
+fputc(sep,f);
+fprintf(f, "%lld", el->basesInSample);
+fputc(sep,f);
+if (sep == ',') fputc('"',f);
+fprintf(f, "%s", el->sampleFileName);
+if (sep == ',') fputc('"',f);
+fputc(sep,f);
+fprintf(f, "%lld", el->readCount);
+fputc(sep,f);
+fprintf(f, "%lld", el->baseCount);
+fputc(sep,f);
+fprintf(f, "%g", el->readSizeMean);
+fputc(sep,f);
+fprintf(f, "%g", el->readSizeStd);
+fputc(sep,f);
+fprintf(f, "%d", el->readSizeMin);
+fputc(sep,f);
+fprintf(f, "%d", el->readSizeMax);
+fputc(sep,f);
+fprintf(f, "%g", el->qualMean);
+fputc(sep,f);
+fprintf(f, "%g", el->qualStd);
+fputc(sep,f);
+fprintf(f, "%g", el->qualMin);
+fputc(sep,f);
+fprintf(f, "%g", el->qualMax);
+fputc(sep,f);
+if (sep == ',') fputc('"',f);
+fprintf(f, "%s", el->qualType);
+if (sep == ',') fputc('"',f);
+fputc(sep,f);
+fprintf(f, "%d", el->qualZero);
+fputc(sep,f);
+fprintf(f, "%g", el->atRatio);
+fputc(sep,f);
+fprintf(f, "%g", el->aRatio);
+fputc(sep,f);
+fprintf(f, "%g", el->cRatio);
+fputc(sep,f);
+fprintf(f, "%g", el->gRatio);
+fputc(sep,f);
+fprintf(f, "%g", el->tRatio);
+fputc(sep,f);
+fprintf(f, "%g", el->nRatio);
+fputc(sep,f);
+{
+int i;
+if (sep == ',') fputc('{',f);
+for (i=0; i<el->readSizeMax; ++i)
+    {
+    fprintf(f, "%g", el->qualPos[i]);
+    fputc(',', f);
+    }
+if (sep == ',') fputc('}',f);
+}
+fputc(sep,f);
+{
+int i;
+if (sep == ',') fputc('{',f);
+for (i=0; i<el->readSizeMax; ++i)
+    {
+    fprintf(f, "%g", el->aAtPos[i]);
+    fputc(',', f);
+    }
+if (sep == ',') fputc('}',f);
+}
+fputc(sep,f);
+{
+int i;
+if (sep == ',') fputc('{',f);
+for (i=0; i<el->readSizeMax; ++i)
+    {
+    fprintf(f, "%g", el->cAtPos[i]);
+    fputc(',', f);
+    }
+if (sep == ',') fputc('}',f);
+}
+fputc(sep,f);
+{
+int i;
+if (sep == ',') fputc('{',f);
+for (i=0; i<el->readSizeMax; ++i)
+    {
+    fprintf(f, "%g", el->gAtPos[i]);
+    fputc(',', f);
+    }
+if (sep == ',') fputc('}',f);
+}
+fputc(sep,f);
+{
+int i;
+if (sep == ',') fputc('{',f);
+for (i=0; i<el->readSizeMax; ++i)
+    {
+    fprintf(f, "%g", el->tAtPos[i]);
+    fputc(',', f);
+    }
+if (sep == ',') fputc('}',f);
+}
+fputc(sep,f);
+{
+int i;
+if (sep == ',') fputc('{',f);
+for (i=0; i<el->readSizeMax; ++i)
+    {
+    fprintf(f, "%g", el->nAtPos[i]);
+    fputc(',', f);
+    }
+if (sep == ',') fputc('}',f);
+}
 fputc(lastSep,f);
 }
 
@@ -1799,7 +2223,7 @@ void edwQaEnrichTargetSaveToDb(struct sqlConnection *conn, struct edwQaEnrichTar
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,%u,'%s',%u,%lld)", 
@@ -1807,7 +2231,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,%u,'%s',%u,%lld)",
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwQaEnrichTarget *edwQaEnrichTargetLoad(char **row)
 /* Load a edwQaEnrichTarget from row fetched with select * from edwQaEnrichTarget
@@ -1964,7 +2387,7 @@ void edwQaEnrichSaveToDb(struct sqlConnection *conn, struct edwQaEnrich *el, cha
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,%u,%u,%lld,%lld,%g,%g,%g)", 
@@ -1972,7 +2395,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,%u,%u,%lld,%lld,%g,%g,%g)"
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwQaEnrich *edwQaEnrichLoad(char **row)
 /* Load a edwQaEnrich from row fetched with select * from edwQaEnrich
@@ -2094,6 +2516,458 @@ fputc(lastSep,f);
 }
 
 
+char *edwQaContamTargetCommaSepFieldNames = "id,assemblyId";
+
+void edwQaContamTargetStaticLoad(char **row, struct edwQaContamTarget *ret)
+/* Load a row from edwQaContamTarget table into ret.  The contents of ret will
+ * be replaced at the next call to this function. */
+{
+
+ret->id = sqlUnsigned(row[0]);
+ret->assemblyId = sqlUnsigned(row[1]);
+}
+
+struct edwQaContamTarget *edwQaContamTargetLoadByQuery(struct sqlConnection *conn, char *query)
+/* Load all edwQaContamTarget from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwQaContamTargetFreeList(). */
+{
+struct edwQaContamTarget *list = NULL, *el;
+struct sqlResult *sr;
+char **row;
+
+sr = sqlGetResult(conn, query);
+while ((row = sqlNextRow(sr)) != NULL)
+    {
+    el = edwQaContamTargetLoad(row);
+    slAddHead(&list, el);
+    }
+slReverse(&list);
+sqlFreeResult(&sr);
+return list;
+}
+
+void edwQaContamTargetSaveToDb(struct sqlConnection *conn, struct edwQaContamTarget *el, char *tableName, int updateSize)
+/* Save edwQaContamTarget as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+{
+struct dyString *update = newDyString(updateSize);
+sqlDyStringPrintf(update, "insert into %s values ( %u,%u)", 
+	tableName,  el->id,  el->assemblyId);
+sqlUpdate(conn, update->string);
+freeDyString(&update);
+}
+
+struct edwQaContamTarget *edwQaContamTargetLoad(char **row)
+/* Load a edwQaContamTarget from row fetched with select * from edwQaContamTarget
+ * from database.  Dispose of this with edwQaContamTargetFree(). */
+{
+struct edwQaContamTarget *ret;
+
+AllocVar(ret);
+ret->id = sqlUnsigned(row[0]);
+ret->assemblyId = sqlUnsigned(row[1]);
+return ret;
+}
+
+struct edwQaContamTarget *edwQaContamTargetLoadAll(char *fileName) 
+/* Load all edwQaContamTarget from a whitespace-separated file.
+ * Dispose of this with edwQaContamTargetFreeList(). */
+{
+struct edwQaContamTarget *list = NULL, *el;
+struct lineFile *lf = lineFileOpen(fileName, TRUE);
+char *row[2];
+
+while (lineFileRow(lf, row))
+    {
+    el = edwQaContamTargetLoad(row);
+    slAddHead(&list, el);
+    }
+lineFileClose(&lf);
+slReverse(&list);
+return list;
+}
+
+struct edwQaContamTarget *edwQaContamTargetLoadAllByChar(char *fileName, char chopper) 
+/* Load all edwQaContamTarget from a chopper separated file.
+ * Dispose of this with edwQaContamTargetFreeList(). */
+{
+struct edwQaContamTarget *list = NULL, *el;
+struct lineFile *lf = lineFileOpen(fileName, TRUE);
+char *row[2];
+
+while (lineFileNextCharRow(lf, chopper, row, ArraySize(row)))
+    {
+    el = edwQaContamTargetLoad(row);
+    slAddHead(&list, el);
+    }
+lineFileClose(&lf);
+slReverse(&list);
+return list;
+}
+
+struct edwQaContamTarget *edwQaContamTargetCommaIn(char **pS, struct edwQaContamTarget *ret)
+/* Create a edwQaContamTarget out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwQaContamTarget */
+{
+char *s = *pS;
+
+if (ret == NULL)
+    AllocVar(ret);
+ret->id = sqlUnsignedComma(&s);
+ret->assemblyId = sqlUnsignedComma(&s);
+*pS = s;
+return ret;
+}
+
+void edwQaContamTargetFree(struct edwQaContamTarget **pEl)
+/* Free a single dynamically allocated edwQaContamTarget such as created
+ * with edwQaContamTargetLoad(). */
+{
+struct edwQaContamTarget *el;
+
+if ((el = *pEl) == NULL) return;
+freez(pEl);
+}
+
+void edwQaContamTargetFreeList(struct edwQaContamTarget **pList)
+/* Free a list of dynamically allocated edwQaContamTarget's */
+{
+struct edwQaContamTarget *el, *next;
+
+for (el = *pList; el != NULL; el = next)
+    {
+    next = el->next;
+    edwQaContamTargetFree(&el);
+    }
+*pList = NULL;
+}
+
+void edwQaContamTargetOutput(struct edwQaContamTarget *el, FILE *f, char sep, char lastSep) 
+/* Print out edwQaContamTarget.  Separate fields with sep. Follow last field with lastSep. */
+{
+fprintf(f, "%u", el->id);
+fputc(sep,f);
+fprintf(f, "%u", el->assemblyId);
+fputc(lastSep,f);
+}
+
+
+char *edwQaContamCommaSepFieldNames = "id,fileId,qaContamTargetId,mapRatio";
+
+void edwQaContamStaticLoad(char **row, struct edwQaContam *ret)
+/* Load a row from edwQaContam table into ret.  The contents of ret will
+ * be replaced at the next call to this function. */
+{
+
+ret->id = sqlUnsigned(row[0]);
+ret->fileId = sqlUnsigned(row[1]);
+ret->qaContamTargetId = sqlUnsigned(row[2]);
+ret->mapRatio = sqlDouble(row[3]);
+}
+
+struct edwQaContam *edwQaContamLoadByQuery(struct sqlConnection *conn, char *query)
+/* Load all edwQaContam from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwQaContamFreeList(). */
+{
+struct edwQaContam *list = NULL, *el;
+struct sqlResult *sr;
+char **row;
+
+sr = sqlGetResult(conn, query);
+while ((row = sqlNextRow(sr)) != NULL)
+    {
+    el = edwQaContamLoad(row);
+    slAddHead(&list, el);
+    }
+slReverse(&list);
+sqlFreeResult(&sr);
+return list;
+}
+
+void edwQaContamSaveToDb(struct sqlConnection *conn, struct edwQaContam *el, char *tableName, int updateSize)
+/* Save edwQaContam as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+{
+struct dyString *update = newDyString(updateSize);
+sqlDyStringPrintf(update, "insert into %s values ( %u,%u,%u,%g)", 
+	tableName,  el->id,  el->fileId,  el->qaContamTargetId,  el->mapRatio);
+sqlUpdate(conn, update->string);
+freeDyString(&update);
+}
+
+struct edwQaContam *edwQaContamLoad(char **row)
+/* Load a edwQaContam from row fetched with select * from edwQaContam
+ * from database.  Dispose of this with edwQaContamFree(). */
+{
+struct edwQaContam *ret;
+
+AllocVar(ret);
+ret->id = sqlUnsigned(row[0]);
+ret->fileId = sqlUnsigned(row[1]);
+ret->qaContamTargetId = sqlUnsigned(row[2]);
+ret->mapRatio = sqlDouble(row[3]);
+return ret;
+}
+
+struct edwQaContam *edwQaContamLoadAll(char *fileName) 
+/* Load all edwQaContam from a whitespace-separated file.
+ * Dispose of this with edwQaContamFreeList(). */
+{
+struct edwQaContam *list = NULL, *el;
+struct lineFile *lf = lineFileOpen(fileName, TRUE);
+char *row[4];
+
+while (lineFileRow(lf, row))
+    {
+    el = edwQaContamLoad(row);
+    slAddHead(&list, el);
+    }
+lineFileClose(&lf);
+slReverse(&list);
+return list;
+}
+
+struct edwQaContam *edwQaContamLoadAllByChar(char *fileName, char chopper) 
+/* Load all edwQaContam from a chopper separated file.
+ * Dispose of this with edwQaContamFreeList(). */
+{
+struct edwQaContam *list = NULL, *el;
+struct lineFile *lf = lineFileOpen(fileName, TRUE);
+char *row[4];
+
+while (lineFileNextCharRow(lf, chopper, row, ArraySize(row)))
+    {
+    el = edwQaContamLoad(row);
+    slAddHead(&list, el);
+    }
+lineFileClose(&lf);
+slReverse(&list);
+return list;
+}
+
+struct edwQaContam *edwQaContamCommaIn(char **pS, struct edwQaContam *ret)
+/* Create a edwQaContam out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwQaContam */
+{
+char *s = *pS;
+
+if (ret == NULL)
+    AllocVar(ret);
+ret->id = sqlUnsignedComma(&s);
+ret->fileId = sqlUnsignedComma(&s);
+ret->qaContamTargetId = sqlUnsignedComma(&s);
+ret->mapRatio = sqlDoubleComma(&s);
+*pS = s;
+return ret;
+}
+
+void edwQaContamFree(struct edwQaContam **pEl)
+/* Free a single dynamically allocated edwQaContam such as created
+ * with edwQaContamLoad(). */
+{
+struct edwQaContam *el;
+
+if ((el = *pEl) == NULL) return;
+freez(pEl);
+}
+
+void edwQaContamFreeList(struct edwQaContam **pList)
+/* Free a list of dynamically allocated edwQaContam's */
+{
+struct edwQaContam *el, *next;
+
+for (el = *pList; el != NULL; el = next)
+    {
+    next = el->next;
+    edwQaContamFree(&el);
+    }
+*pList = NULL;
+}
+
+void edwQaContamOutput(struct edwQaContam *el, FILE *f, char sep, char lastSep) 
+/* Print out edwQaContam.  Separate fields with sep. Follow last field with lastSep. */
+{
+fprintf(f, "%u", el->id);
+fputc(sep,f);
+fprintf(f, "%u", el->fileId);
+fputc(sep,f);
+fprintf(f, "%u", el->qaContamTargetId);
+fputc(sep,f);
+fprintf(f, "%g", el->mapRatio);
+fputc(lastSep,f);
+}
+
+
+char *edwQaRepeatCommaSepFieldNames = "id,fileId,repeatClass,mapRatio";
+
+void edwQaRepeatStaticLoad(char **row, struct edwQaRepeat *ret)
+/* Load a row from edwQaRepeat table into ret.  The contents of ret will
+ * be replaced at the next call to this function. */
+{
+
+ret->id = sqlUnsigned(row[0]);
+ret->fileId = sqlUnsigned(row[1]);
+ret->repeatClass = row[2];
+ret->mapRatio = sqlDouble(row[3]);
+}
+
+struct edwQaRepeat *edwQaRepeatLoadByQuery(struct sqlConnection *conn, char *query)
+/* Load all edwQaRepeat from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwQaRepeatFreeList(). */
+{
+struct edwQaRepeat *list = NULL, *el;
+struct sqlResult *sr;
+char **row;
+
+sr = sqlGetResult(conn, query);
+while ((row = sqlNextRow(sr)) != NULL)
+    {
+    el = edwQaRepeatLoad(row);
+    slAddHead(&list, el);
+    }
+slReverse(&list);
+sqlFreeResult(&sr);
+return list;
+}
+
+void edwQaRepeatSaveToDb(struct sqlConnection *conn, struct edwQaRepeat *el, char *tableName, int updateSize)
+/* Save edwQaRepeat as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+{
+struct dyString *update = newDyString(updateSize);
+sqlDyStringPrintf(update, "insert into %s values ( %u,%u,'%s',%g)", 
+	tableName,  el->id,  el->fileId,  el->repeatClass,  el->mapRatio);
+sqlUpdate(conn, update->string);
+freeDyString(&update);
+}
+
+struct edwQaRepeat *edwQaRepeatLoad(char **row)
+/* Load a edwQaRepeat from row fetched with select * from edwQaRepeat
+ * from database.  Dispose of this with edwQaRepeatFree(). */
+{
+struct edwQaRepeat *ret;
+
+AllocVar(ret);
+ret->id = sqlUnsigned(row[0]);
+ret->fileId = sqlUnsigned(row[1]);
+ret->repeatClass = cloneString(row[2]);
+ret->mapRatio = sqlDouble(row[3]);
+return ret;
+}
+
+struct edwQaRepeat *edwQaRepeatLoadAll(char *fileName) 
+/* Load all edwQaRepeat from a whitespace-separated file.
+ * Dispose of this with edwQaRepeatFreeList(). */
+{
+struct edwQaRepeat *list = NULL, *el;
+struct lineFile *lf = lineFileOpen(fileName, TRUE);
+char *row[4];
+
+while (lineFileRow(lf, row))
+    {
+    el = edwQaRepeatLoad(row);
+    slAddHead(&list, el);
+    }
+lineFileClose(&lf);
+slReverse(&list);
+return list;
+}
+
+struct edwQaRepeat *edwQaRepeatLoadAllByChar(char *fileName, char chopper) 
+/* Load all edwQaRepeat from a chopper separated file.
+ * Dispose of this with edwQaRepeatFreeList(). */
+{
+struct edwQaRepeat *list = NULL, *el;
+struct lineFile *lf = lineFileOpen(fileName, TRUE);
+char *row[4];
+
+while (lineFileNextCharRow(lf, chopper, row, ArraySize(row)))
+    {
+    el = edwQaRepeatLoad(row);
+    slAddHead(&list, el);
+    }
+lineFileClose(&lf);
+slReverse(&list);
+return list;
+}
+
+struct edwQaRepeat *edwQaRepeatCommaIn(char **pS, struct edwQaRepeat *ret)
+/* Create a edwQaRepeat out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwQaRepeat */
+{
+char *s = *pS;
+
+if (ret == NULL)
+    AllocVar(ret);
+ret->id = sqlUnsignedComma(&s);
+ret->fileId = sqlUnsignedComma(&s);
+ret->repeatClass = sqlStringComma(&s);
+ret->mapRatio = sqlDoubleComma(&s);
+*pS = s;
+return ret;
+}
+
+void edwQaRepeatFree(struct edwQaRepeat **pEl)
+/* Free a single dynamically allocated edwQaRepeat such as created
+ * with edwQaRepeatLoad(). */
+{
+struct edwQaRepeat *el;
+
+if ((el = *pEl) == NULL) return;
+freeMem(el->repeatClass);
+freez(pEl);
+}
+
+void edwQaRepeatFreeList(struct edwQaRepeat **pList)
+/* Free a list of dynamically allocated edwQaRepeat's */
+{
+struct edwQaRepeat *el, *next;
+
+for (el = *pList; el != NULL; el = next)
+    {
+    next = el->next;
+    edwQaRepeatFree(&el);
+    }
+*pList = NULL;
+}
+
+void edwQaRepeatOutput(struct edwQaRepeat *el, FILE *f, char sep, char lastSep) 
+/* Print out edwQaRepeat.  Separate fields with sep. Follow last field with lastSep. */
+{
+fprintf(f, "%u", el->id);
+fputc(sep,f);
+fprintf(f, "%u", el->fileId);
+fputc(sep,f);
+if (sep == ',') fputc('"',f);
+fprintf(f, "%s", el->repeatClass);
+if (sep == ',') fputc('"',f);
+fputc(sep,f);
+fprintf(f, "%g", el->mapRatio);
+fputc(lastSep,f);
+}
+
+
 char *edwQaPairSampleOverlapCommaSepFieldNames = "id,elderFileId,youngerFileId,elderSampleBases,youngerSampleBases,sampleOverlapBases,sampleSampleEnrichment";
 
 void edwQaPairSampleOverlapStaticLoad(char **row, struct edwQaPairSampleOverlap *ret)
@@ -2137,7 +3011,7 @@ void edwQaPairSampleOverlapSaveToDb(struct sqlConnection *conn, struct edwQaPair
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,%u,%u,%lld,%lld,%lld,%g)", 
@@ -2145,7 +3019,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,%u,%u,%lld,%lld,%lld,%g)",
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwQaPairSampleOverlap *edwQaPairSampleOverlapLoad(char **row)
 /* Load a edwQaPairSampleOverlap from row fetched with select * from edwQaPairSampleOverlap
@@ -2305,7 +3178,7 @@ void edwQaPairCorrelationSaveToDb(struct sqlConnection *conn, struct edwQaPairCo
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,%u,%u,%g,%g,%g)", 
@@ -2313,7 +3186,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,%u,%u,%g,%g,%g)",
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwQaPairCorrelation *edwQaPairCorrelationLoad(char **row)
 /* Load a edwQaPairCorrelation from row fetched with select * from edwQaPairCorrelation
@@ -2427,6 +3299,184 @@ fputc(lastSep,f);
 }
 
 
+char *edwQaPairedEndFastqCommaSepFieldNames = "id,fileId1,fileId2,concordance,distanceMean,distanceStd,distanceMin,distanceMax,recordComplete";
+
+void edwQaPairedEndFastqStaticLoad(char **row, struct edwQaPairedEndFastq *ret)
+/* Load a row from edwQaPairedEndFastq table into ret.  The contents of ret will
+ * be replaced at the next call to this function. */
+{
+
+ret->id = sqlUnsigned(row[0]);
+ret->fileId1 = sqlUnsigned(row[1]);
+ret->fileId2 = sqlUnsigned(row[2]);
+ret->concordance = sqlDouble(row[3]);
+ret->distanceMean = sqlDouble(row[4]);
+ret->distanceStd = sqlDouble(row[5]);
+ret->distanceMin = sqlDouble(row[6]);
+ret->distanceMax = sqlDouble(row[7]);
+ret->recordComplete = sqlSigned(row[8]);
+}
+
+struct edwQaPairedEndFastq *edwQaPairedEndFastqLoadByQuery(struct sqlConnection *conn, char *query)
+/* Load all edwQaPairedEndFastq from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwQaPairedEndFastqFreeList(). */
+{
+struct edwQaPairedEndFastq *list = NULL, *el;
+struct sqlResult *sr;
+char **row;
+
+sr = sqlGetResult(conn, query);
+while ((row = sqlNextRow(sr)) != NULL)
+    {
+    el = edwQaPairedEndFastqLoad(row);
+    slAddHead(&list, el);
+    }
+slReverse(&list);
+sqlFreeResult(&sr);
+return list;
+}
+
+void edwQaPairedEndFastqSaveToDb(struct sqlConnection *conn, struct edwQaPairedEndFastq *el, char *tableName, int updateSize)
+/* Save edwQaPairedEndFastq as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+{
+struct dyString *update = newDyString(updateSize);
+sqlDyStringPrintf(update, "insert into %s values ( %u,%u,%u,%g,%g,%g,%g,%g,%d)", 
+	tableName,  el->id,  el->fileId1,  el->fileId2,  el->concordance,  el->distanceMean,  el->distanceStd,  el->distanceMin,  el->distanceMax,  el->recordComplete);
+sqlUpdate(conn, update->string);
+freeDyString(&update);
+}
+
+struct edwQaPairedEndFastq *edwQaPairedEndFastqLoad(char **row)
+/* Load a edwQaPairedEndFastq from row fetched with select * from edwQaPairedEndFastq
+ * from database.  Dispose of this with edwQaPairedEndFastqFree(). */
+{
+struct edwQaPairedEndFastq *ret;
+
+AllocVar(ret);
+ret->id = sqlUnsigned(row[0]);
+ret->fileId1 = sqlUnsigned(row[1]);
+ret->fileId2 = sqlUnsigned(row[2]);
+ret->concordance = sqlDouble(row[3]);
+ret->distanceMean = sqlDouble(row[4]);
+ret->distanceStd = sqlDouble(row[5]);
+ret->distanceMin = sqlDouble(row[6]);
+ret->distanceMax = sqlDouble(row[7]);
+ret->recordComplete = sqlSigned(row[8]);
+return ret;
+}
+
+struct edwQaPairedEndFastq *edwQaPairedEndFastqLoadAll(char *fileName) 
+/* Load all edwQaPairedEndFastq from a whitespace-separated file.
+ * Dispose of this with edwQaPairedEndFastqFreeList(). */
+{
+struct edwQaPairedEndFastq *list = NULL, *el;
+struct lineFile *lf = lineFileOpen(fileName, TRUE);
+char *row[9];
+
+while (lineFileRow(lf, row))
+    {
+    el = edwQaPairedEndFastqLoad(row);
+    slAddHead(&list, el);
+    }
+lineFileClose(&lf);
+slReverse(&list);
+return list;
+}
+
+struct edwQaPairedEndFastq *edwQaPairedEndFastqLoadAllByChar(char *fileName, char chopper) 
+/* Load all edwQaPairedEndFastq from a chopper separated file.
+ * Dispose of this with edwQaPairedEndFastqFreeList(). */
+{
+struct edwQaPairedEndFastq *list = NULL, *el;
+struct lineFile *lf = lineFileOpen(fileName, TRUE);
+char *row[9];
+
+while (lineFileNextCharRow(lf, chopper, row, ArraySize(row)))
+    {
+    el = edwQaPairedEndFastqLoad(row);
+    slAddHead(&list, el);
+    }
+lineFileClose(&lf);
+slReverse(&list);
+return list;
+}
+
+struct edwQaPairedEndFastq *edwQaPairedEndFastqCommaIn(char **pS, struct edwQaPairedEndFastq *ret)
+/* Create a edwQaPairedEndFastq out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwQaPairedEndFastq */
+{
+char *s = *pS;
+
+if (ret == NULL)
+    AllocVar(ret);
+ret->id = sqlUnsignedComma(&s);
+ret->fileId1 = sqlUnsignedComma(&s);
+ret->fileId2 = sqlUnsignedComma(&s);
+ret->concordance = sqlDoubleComma(&s);
+ret->distanceMean = sqlDoubleComma(&s);
+ret->distanceStd = sqlDoubleComma(&s);
+ret->distanceMin = sqlDoubleComma(&s);
+ret->distanceMax = sqlDoubleComma(&s);
+ret->recordComplete = sqlSignedComma(&s);
+*pS = s;
+return ret;
+}
+
+void edwQaPairedEndFastqFree(struct edwQaPairedEndFastq **pEl)
+/* Free a single dynamically allocated edwQaPairedEndFastq such as created
+ * with edwQaPairedEndFastqLoad(). */
+{
+struct edwQaPairedEndFastq *el;
+
+if ((el = *pEl) == NULL) return;
+freez(pEl);
+}
+
+void edwQaPairedEndFastqFreeList(struct edwQaPairedEndFastq **pList)
+/* Free a list of dynamically allocated edwQaPairedEndFastq's */
+{
+struct edwQaPairedEndFastq *el, *next;
+
+for (el = *pList; el != NULL; el = next)
+    {
+    next = el->next;
+    edwQaPairedEndFastqFree(&el);
+    }
+*pList = NULL;
+}
+
+void edwQaPairedEndFastqOutput(struct edwQaPairedEndFastq *el, FILE *f, char sep, char lastSep) 
+/* Print out edwQaPairedEndFastq.  Separate fields with sep. Follow last field with lastSep. */
+{
+fprintf(f, "%u", el->id);
+fputc(sep,f);
+fprintf(f, "%u", el->fileId1);
+fputc(sep,f);
+fprintf(f, "%u", el->fileId2);
+fputc(sep,f);
+fprintf(f, "%g", el->concordance);
+fputc(sep,f);
+fprintf(f, "%g", el->distanceMean);
+fputc(sep,f);
+fprintf(f, "%g", el->distanceStd);
+fputc(sep,f);
+fprintf(f, "%g", el->distanceMin);
+fputc(sep,f);
+fprintf(f, "%g", el->distanceMax);
+fputc(sep,f);
+fprintf(f, "%d", el->recordComplete);
+fputc(lastSep,f);
+}
+
+
 char *edwJobCommaSepFieldNames = "id,commandLine,startTime,endTime,stderr,returnCode";
 
 void edwJobStaticLoad(char **row, struct edwJob *ret)
@@ -2469,7 +3519,7 @@ void edwJobSaveToDb(struct sqlConnection *conn, struct edwJob *el, char *tableNa
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%lld,%lld,'%s',%d)", 
@@ -2477,7 +3527,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%lld,%lld,'%s',%d)",
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwJob *edwJobLoad(char **row)
 /* Load a edwJob from row fetched with select * from edwJob
@@ -2639,7 +3688,7 @@ void edwSubmitJobSaveToDb(struct sqlConnection *conn, struct edwSubmitJob *el, c
  * As blob fields may be arbitrary size updateSize specifies the approx size
  * of a string that would contain the entire query. Arrays of native types are
  * converted to comma separated strings and loaded as such, User defined types are
- * inserted as NULL. Strings are automatically escaped to allow insertion into the database. */
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
 {
 struct dyString *update = newDyString(updateSize);
 sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%lld,%lld,'%s',%d)", 
@@ -2647,7 +3696,6 @@ sqlDyStringPrintf(update, "insert into %s values ( %u,'%s',%lld,%lld,'%s',%d)",
 sqlUpdate(conn, update->string);
 freeDyString(&update);
 }
-
 
 struct edwSubmitJob *edwSubmitJobLoad(char **row)
 /* Load a edwSubmitJob from row fetched with select * from edwSubmitJob

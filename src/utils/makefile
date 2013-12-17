@@ -58,6 +58,7 @@ UTILS_APPLIST = \
 	faToTwoBit \
 	faTrans \
 	findMotif \
+	gitTools \
 	headRest \
 	htmlCheck \
 	newProg \
@@ -116,7 +117,6 @@ UCSC_APPS = \
 	gapSplit \
 	gffPeek \
 	git-reports \
-	gitTools \
 	htmlPics \
 	jkUniq \
 	lineCount \
@@ -179,11 +179,15 @@ scripts: $(SCRIPT_FILES:%=%.scripts)
 
 alpha: scripts all
 
-test:
+testAll: $(ALL_APPS:%=%.testAll)
+
+%.testAll:
+	@test -s $*/tests/makefile && (echo $*; cd $* && $(MAKE) test) || true
+
+test: testAll
 	cd faToTwoBit && ${MAKE} test
 	cd twoBitToFa && ${MAKE} test
 	cd twoBitInfo && ${MAKE} test
-	cd pslLiftSubrangeBlat && ${MAKE} test
 	cd bedGeneParts && ${MAKE} test
 
 clean: $(ALL_APPS:%=%.clean)

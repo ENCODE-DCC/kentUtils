@@ -55,6 +55,22 @@ struct cgiVar
 struct cgiVar* cgiVarList();
 /* return the list of cgiVar's */
 
+struct cgiDictionary
+/* Stuff to encapsulate parsed out CGI vars. */
+    {
+    struct cgiDictionary *next;	    /* Next in list if we have multiple */
+    char *stringData;		    /* Where values if cgi-vars live. */
+    struct hash *hash;		    /* Keyed by cgi-var name, value is cgiVar */
+    struct cgiVar *list;	    /* List of all vars. */
+    };
+
+void cgiDictionaryFree(struct cgiDictionary **pD);
+/* Free up resources associated with dictionary. */
+
+struct cgiDictionary *cgiDictionaryFromEncodedString(char *encodedString);
+/* Giving a this=that&this=that string,  return cgiDictionary parsed out from it. 
+ * This does *not* destroy input like the lower level cgiParse functions do. */
+
 char *findCookieData(char *varName);
 /* Get the string associated with varName from the cookie string. */
 
@@ -88,6 +104,9 @@ char *cgiServerNamePort();
 
 boolean cgiServerHttpsIsOn();
 /* Return true if HTTPS is on */
+
+char *cgiAppendSForHttps();
+/* if running on https, add the letter s to the url protocol */
 
 char *cgiRemoteAddr();
 /* Return IP address of client (or "unknown"). */
@@ -450,6 +469,11 @@ boolean cgiParseInput(char *input, struct hash **retHash,
 void cgiParseInputAbort(char *input, struct hash **retHash,
         struct cgiVar **retList);
 /* Parse cgi-style input into a hash table and list as above but abort if there's an error. */
+
+char *cgiStringNewValForVar(char *cgiIn, char *varName, char *newVal);
+/* Return a cgi-encoded string with newVal in place of what was oldVal.
+ * It is an error for var not to exist.   Do a freeMem of this string
+ * when you are through. */
 
 void cgiSimpleTableStart();
 /* start HTML table  -- no customization. Leaves room

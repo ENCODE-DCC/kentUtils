@@ -63,7 +63,7 @@ table edwFile
     lstring tags;               "CGI encoded name=val pairs from manifest"
     lstring errorMessage; "If non-empty contains last error message from upload. If empty upload is ok"
     string deprecated; "If non-empty why you shouldn't use this file any more."
-    string replacedBy; "If non-empty license plate of file that replaces this one."
+    uint replacedBy;   "If non-zero id of file that replaces this one."
     )
 
 table edwSubmit
@@ -84,6 +84,7 @@ table edwSubmit
     bigInt newBytes;         "Bytes in new files (so far)."
     lstring errorMessage; "If non-empty contains last error message. If empty submit is ok"
     uint fileIdInTransit; "edwFile.id of file currently being transferred or zero"
+    uint metaChangeCount; "Number of files where metadata changed by submission"
     )
 
 table edwSubscriber
@@ -115,11 +116,11 @@ table edwValidFile
     (
     uint id primary auto;          "ID of validated file"
     char[16] licensePlate index;  "A abc123 looking license-platish thing."
-    uint fileId index;      "Pointer to file in main file table"
+    uint fileId unique;      "Pointer to file in main file table"
     string format;    "What format it's in from manifest"
     string outputType index[16]; "What output_type it is from manifest"
     string experiment index[16]; "What experiment it's in from manifest"
-    string replicate;  "What replicate it is from manifest"
+    string replicate;  "What replicate it is from manifest.  Values 1,2,3... pooled, or ''"
     string validKey;  "The valid_key tag from manifest"
     string enrichedIn; "The enriched_in tag from manifest"
     string ucscDb;    "Something like hg19 or mm9"
@@ -132,6 +133,45 @@ table edwValidFile
     double mapRatio;    "Proportion of items that map to genome"
     double sampleCoverage; "Proportion of assembly covered by at least one item in sample"
     double depth;   "Estimated genome-equivalents covered by possibly overlapping data"
+    byte singleQaStatus;  "0 for untested, 1 for pass, -1 for fail"
+    byte replicateQaStatus;  "0 for untested, 1 for pass, -1 for fail"
+
+    string technicalReplicate; "Manifest's technical_replicate tag. Values 1,2,3... pooled or ''"
+    string pairedEnd; "The paired_end tag from the manifest.  Values 1,2 or ''"
+    )
+
+table edwFastqFile
+"info on a file in fastq short read format beyond what's in edwValidFile"
+    (
+    uint id primary auto;  "ID in this table"
+    uint fileId unique;	"ID in edwFile table"
+    bigint sampleCount; "# of reads in sample." 
+    bigint basesInSample; "# of bases in sample."
+    string sampleFileName; "Name of file containing sampleCount randomly selected items from file."
+    bigint readCount; "# of reads in file"
+    bigint baseCount; "# of bases in all reads added up"
+    double readSizeMean; "Average read size"
+    double readSizeStd;  "Standard deviation of read size"
+    int readSizeMin;  "Minimum read size"
+    int readSizeMax; "Maximum read size"
+    double qualMean;  "Mean quality scored as 10*-log10(errorProbability) or close to it.  >25 is good"
+    double qualStd;   "Standard deviation of quality"
+    double qualMin;   "Minimum observed quality"
+    double qualMax;   "Maximum observed quality"
+    string qualType;  "For fastq files either 'sanger' or 'illumina'
+    int qualZero;  "For fastq files offset to get to zero value in ascii encoding"
+    double atRatio;  "Ratio of A+T to total sequence (not including Ns)"
+    double aRatio; "Ratio of A to total sequence (including Ns)"
+    double cRatio; "Ratio of C to total sequence (including Ns)"
+    double gRatio; "Ratio of G to total sequence (including Ns)"
+    double tRatio; "Ratio of T to total sequence (including Ns)"
+    double nRatio; "Ratio of N or . to total sequence"
+    double[readSizeMax] qualPos;  "Mean value for each position in a read up to some max."
+    double[readSizeMax] aAtPos;   "% of As at each pos"
+    double[readSizeMax] cAtPos;   "% of Cs at each pos"
+    double[readSizeMax] gAtPos;   "% of Gs at each pos"
+    double[readSizeMax] tAtPos;   "% of Ts at each pos"
+    double[readSizeMax] nAtPos;   "% of '.' or 'N' at each pos"
     )
 
 table edwQaEnrichTarget
@@ -149,12 +189,37 @@ table edwQaEnrich
     (
     uint id primary auto;    "ID of this enrichment analysis"
     uint fileId index;  "File we are looking at skeptically"
-    uint qaEnrichTargetId;  "Information about an target for this analysis"
+    uint qaEnrichTargetId;  "Information about a target for this analysis"
     bigInt targetBaseHits;  "Number of hits to bases in target"
     bigInt targetUniqHits;  "Number of unique bases hit in target"
     double coverage;    "Coverage of target - just targetUniqHits/targetSize"
     double enrichment;  "Amount we hit target/amount we hit genome"
     double uniqEnrich;  "coverage/sampleCoverage"
+    )
+
+table edwQaContamTarget
+"A target for our contamination analysis."
+    (
+    uint id primary auto;   "ID of this contamination target"
+    uint assemblyId unique;  "Assembly we're aligning against to check  for contamination."
+    )
+
+table edwQaContam
+"Results of contamination analysis of one file against one target"
+    (
+    uint id primary auto;   "ID of this contamination analysis"
+    uint fileId index;  "File we are looking at skeptically"
+    uint qaContamTargetId;  "Information about a target for this analysis"
+    double mapRatio;    "Proportion of items that map to target"
+    )
+
+table edwQaRepeat
+"What percentage of data set aligns to various repeat classes."
+    (
+    uint id primary auto;   "ID of this repeat analysis."
+    uint fileId index;   "File we are analysing."
+    string repeatClass;	"RepeatMasker high end classification,  or 'total' for all repeats."
+    double mapRatio;	"Proportion that map to this repeat."
     )
 
 table edwQaPairSampleOverlap
@@ -179,6 +244,21 @@ table edwQaPairCorrelation
     double pearsonOverall; "Pearson's R over all places where both have data"
     double pearsonClipped; "Pearson's R clipped at two standard deviations up from the mean" 
     )
+
+table edwQaPairedEndFastq
+"Information about two paired-end fastqs"
+    (
+    uint id primary auto; "Id of this set of paired end files"
+    uint fileId1 unique; "Id of first in pair"
+    uint fileId2 unique; "Id of second in pair"
+    double concordance;  "% of uniquely aligning reads where pairs nearby and point right way"
+    double distanceMean; "Average distance between reads"
+    double distanceStd;  "Standard deviation of distance"
+    double distanceMin;	 "Minimum distance"
+    double distanceMax;  "Maximum distatnce"
+    byte recordComplete; "Flag to avoid a race condition. Ignore record if this is 0"
+    )
+
 
 table edwJob
 "A job to be run asynchronously and not too many all at once."

@@ -43,6 +43,9 @@ extern struct customTrack *theCtList;	/* List of custom tracks. */
 extern char *curTable;	/* Current selected table. */
 struct joiner *allJoiner;	/* Info on how to join tables. */
 
+#define GALAXY_URL_BASE "https://usegalaxy.org"
+#define GALAXY_URL_APP GALAXY_URL_BASE "/tool_runner"
+
 /* --------------- HTML Helpers ----------------- */
 
 void hPrintSpaces(int count);
@@ -662,6 +665,9 @@ boolean isMafTable(char *database, struct trackDb *track, char *table);
 void doOutMaf(struct trackDb *track, char *table, struct sqlConnection *conn);
 /* Output regions as MAF. */
 
+void doHalMaf(struct trackDb *track, char *table, struct sqlConnection *conn);
+/* Output HAL regions as MAF. */
+
 /* ----------- Wiggle business in wiggle.c -------------------- */
 
 #define	MAX_REGION_DISPLAY	1000
@@ -788,6 +794,15 @@ void showSchemaBigBed(char *table, struct trackDb *tdb);
 struct sqlFieldType *sqlFieldTypesFromAs(struct asObject *as);
 /* Convert asObject to list of sqlFieldTypes */
 
+/* HAL stuff from hal.c */
+
+boolean isHalTable(char *table);
+/* Return TRUE if table corresponds to a HAL file. */
+
+struct slName *halGetFields(char *table);
+/* Get fields of hal as simple name list. */
+
+void halTabOut(char *db, char *table, struct sqlConnection *conn, char *fields, FILE *f);
 /* BAM stuff from bam.c */
 
 boolean isBamTable(char *table);

@@ -36,8 +36,7 @@ return sd;
 static int setSocketNonBlocking(int sd, boolean set)
 /* Use socket control flags to set O_NONBLOCK if set==TRUE,
  * or clear it if set==FALSE.
- * Return -1 if there are any errors, 0 if successful. i
- * Also closes sd if error. */
+ * Return -1 if there are any errors, 0 if successful. */
 {
 long fcntlFlags;
 // Set or clear non-blocking
@@ -58,6 +57,29 @@ if (fcntl(sd, F_SETFL, fcntlFlags) < 0)
 return 0;
 }
 
+int setReadWriteTimeouts(int sd, int seconds)
+/* Set read and write timeouts on socket sd 
+ * Return -1 if there are any errors, 0 if successful. */
+{
+struct timeval timeout;      
+timeout.tv_sec = seconds;
+timeout.tv_usec = 0;
+
+if (setsockopt(sd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+    {
+    warn("setsockopt failed setting socket receive timeout\n");
+    return -1;
+    }
+
+if (setsockopt(sd, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+    {
+    warn("setsockopt failed setting socket send timeout\n");
+    return -1;
+    }
+return 0;
+}
+
+
 static struct timeval tvMinus(struct timeval a, struct timeval b)
 /* Return the result of a - b; this handles wrapping of milliseconds. 
  * result.tv_usec will always be positive. 
@@ -77,7 +99,8 @@ return a;
 static int netConnectWithTimeout(char *hostName, int port, long msTimeout)
 /* In order to avoid a very long default timeout (several minutes) for hosts that will
  * not answer the port, we are forced to connect non-blocking.
- * After the connection has been established, we return to blocking mode. */
+ * After the connection has been established, we return to blocking mode.
+ * Also closes sd if error. */
 {
 int sd;
 struct sockaddr_in sai;		/* Some system socket info. */
@@ -182,6 +205,12 @@ if (res < 0)
 
 // Set to blocking mode again
 if (setSocketNonBlocking(sd, FALSE) < 0)
+    {
+    close(sd);
+    return -1;
+    }
+
+if (setReadWriteTimeouts(sd, DEFAULTREADWRITETTIMEOUTSEC) < 0)
     {
     close(sd);
     return -1;
@@ -315,12 +344,12 @@ if (!plumberInstalled)
     }
 }
 
-size_t netReadAll(int sd, void *vBuf, size_t size)
+ssize_t netReadAll(int sd, void *vBuf, ssize_t size)
 /* Read given number of bytes into buffer.
  * Don't give up on first read! */
 {
 char *buf = vBuf;
-size_t totalRead = 0;
+ssize_t totalRead = 0;
 int oneRead;
 
 if (!plumberInstalled)
@@ -337,11 +366,11 @@ while (totalRead < size)
 return totalRead;
 }
 
-int netMustReadAll(int sd, void *vBuf, size_t size)
+ssize_t netMustReadAll(int sd, void *vBuf, ssize_t size)
 /* Read given number of bytes into buffer or die.
  * Don't give up if first read is short! */
 {
-int ret = netReadAll(sd, vBuf, size);
+ssize_t ret = netReadAll(sd, vBuf, size);
 if (ret < 0)
     errnoAbort("Couldn't finish netReadAll");
 return ret;
@@ -452,13 +481,28 @@ if (u == NULL)
     strcpy(parsed->file, "/");
 else
     {
+
     parseByteRange(u, &parsed->byteRangeStart, &parsed->byteRangeEnd, TRUE);
 
-    /* need to encode spaces, but not ! other characters */
-    char *t=replaceChars(u," ","%20");
-    safecpy(parsed->file, sizeof(parsed->file), t);
-    freeMem(t);
-    *u = 0;
+    if (sameWord(parsed->protocol,"http") ||
+        sameWord(parsed->protocol,"https"))
+	{
+	// http servers expect the URL request to be URL-encoded already.
+	/* need to encode spaces, but not ! other characters */
+	char *t=replaceChars(u," ","%20");
+	safecpy(parsed->file, sizeof(parsed->file), t);
+	freeMem(t);
+	}
+
+    *u = 0; // terminate the host:port string
+
+    if (sameWord(parsed->protocol,"ftp"))
+	{
+	++u; // that first slash is not considered part of the ftp path 
+	// decode now because the FTP server does NOT expect URL-encoding.
+	cgiDecode(u,parsed->file,strlen(u));
+	}
+
     }
 
 /* Split off user part */

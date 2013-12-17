@@ -9,6 +9,11 @@ endif
 HG_DEFS=-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_GNU_SOURCE -DMACHTYPE_${MACHTYPE}
 HG_INC=-I../inc -I../../inc -I../../../inc -I../../../../inc -I../../../../../inc
 
+# to check for Mac OSX Darwin specifics:
+UNAME_S := $(shell uname -s)
+# to check for builds on hgwdev
+FULLWARN = $(shell uname -n)
+
 #global external libraries 
 L=
 
@@ -26,16 +31,37 @@ ifeq (${USE_SSL},)
 endif
 
 
-# libhal: disabled by default
-ifeq (${USE_HAL},1)
-    L+=/cluster/home/braney/hal/lib/halChain.a /cluster/home/braney/hal/lib/halLod.a /cluster/home/braney/hal/lib/halLib.a /cluster/home/braney/sonLib/lib/sonLib.a /hive/groups/recon/local/lib/libhdf5_cpp.a /hive/groups/recon/local/lib/libhdf5.a /hive/groups/recon/local/lib/libhdf5_hl.a /hive/groups/recon/local/lib/libsz.a -lstdc++
-    HG_DEFS+=-DUSE_HAL
-    HG_INC+=-I/cluster/home/braney/hal/chain/inc/
+# autodetect UCSC installation of hal:
+ifeq (${HALDIR},)
+    HALDIR = /hive/groups/browser/hal
+    ifneq ($(wildcard ${HALDIR}),)
+        ifeq (${USE_HAL},)
+          USE_HAL=1
+        endif
+    endif
 endif
+
+ifeq (${USE_HAL},1)
+    HALLIBS=${HALDIR}/hal/lib/halMaf.a ${HALDIR}/hal/lib/halChain.a ${HALDIR}/hal/lib/halMaf.a ${HALDIR}/hal/lib/halLiftover.a ${HALDIR}/hal/lib/halLod.a ${HALDIR}/hal/lib/halLib.a ${HALDIR}/sonLib/lib/sonLib.a ${HALDIR}/hdf5-1.8.11/hdf5//lib/libhdf5_cpp.a ${HALDIR}/hdf5-1.8.11/hdf5//lib/libhdf5.a ${HALDIR}/hdf5-1.8.11/hdf5//lib/libhdf5_hl.a 
+    HG_DEFS+=-DUSE_HAL
+    HG_INC+=-I${HALDIR}/hal/chain/inc/
+endif
+
 
 # libssl: disabled by default
 ifeq (${USE_SSL},1)
-    L+=-lssl -lcrypto
+    ifneq (${SSL_DIR}, "/usr/include/openssl")
+      ifneq ($(UNAME_S),Darwin)
+        L+=-L${SSL_DIR}/lib
+      endif
+        HG_INC+=-I${SSL_DIR}/include
+    endif
+    # on hgwdev, already using the static library with mysqllient.
+    ifeq (${FULLWARN},hgwdev)
+       L+=/usr/lib64/libssl.a /usr/lib64/libcrypto.a -lkrb5
+    else
+       L+=-lssl -lcrypto
+    endif
     HG_DEFS+=-DUSE_SSL
 endif
 
@@ -64,60 +90,95 @@ ifeq (${PNGINCL},)
   endif
 endif
 
-# autodetect where libmysql is installed
-ifeq (${MYSQLINC},)
-  ifneq ($(wildcard /usr/local/mysql/include/mysql.h),)
-      MYSQLINC=/usr/local/mysql/include
+# autodetect where mysql includes and libraries are installed
+# do not need to do this during 'clean' target (this is very slow for 'clean')
+ifneq ($(MAKECMDGOALS),clean)
+  # on hgwdev, use the static library.
+  ifeq (${FULLWARN},hgwdev)
+    MYSQLINC=/usr/include/mysql
+    MYSQLLIBS=/usr/lib64/libssl.a /usr/lib64/libcrypto.a /usr/lib64/mysql/libmysqlclient.a -lkrb5
   endif
-endif
-ifeq (${MYSQLINC},)
-  ifneq ($(wildcard /usr/include/mysql/mysql.h),)
-      MYSQLINC=/usr/include/mysql
+  # this does *not* work on Mac OSX with the dynamic libraries
+  ifneq ($(UNAME_S),Darwin)
+    ifeq (${MYSQLINC},)
+      MYSQLINC := $(shell mysql_config --include | sed -e 's/-I//' || true)
+      #  $(info using mysql_config to set MYSQLINC: ${MYSQLINC})
+    endif
+    ifeq (${MYSQLLIBS},)
+      MYSQLLIBS := $(shell mysql_config --libs || true)
+      #  $(info using mysql_config to set MYSQLLIBS: ${MYSQLLIBS})
+    endif
   endif
-endif
-ifeq (${MYSQLINC},)
-  ifneq ($(wildcard /opt/local/include/mysql55/mysql/mysql.h),)
-      MYSQLINC=/opt/local/include/mysql55/mysql
-  endif
-endif
-ifeq (${MYSQLLIBS},)
-  ifneq ($(wildcard /usr/lib64/mysql/libmysqlclient.a),)
-      MYSQLLIBS=/usr/lib64/mysql/libmysqlclient.a
-  endif
-endif
-ifeq (${MYSQLLIBS},)
-  ifneq ($(wildcard /usr/local/mysql/lib/libmysqlclient.a),)
-      MYSQLLIBS=/usr/local/mysql/lib/libmysqlclient.a
-  endif
-endif
-ifeq (${MYSQLLIBS},)
-  ifneq ($(wildcard /usr/local/mysql/lib/libmysqlclient.a),)
-      MYSQLLIBS=/usr/local/mysql/lib/libmysqlclient.a
-  endif
-endif
-ifeq (${MYSQLLIBS},)
-  ifneq ($(wildcard /usr/lib64/mysql/libmysqlclient.so),)
-      MYSQLLIBS=/usr/lib64/mysql/libmysqlclient.so
-  endif
-endif
-ifeq (${MYSQLLIBS},)
-  ifneq ($(wildcard /usr/lib/libmysqlclient.a),)
-      MYSQLLIBS=/usr/lib/libmysqlclient.a
-  endif
-endif
-ifeq (${MYSQLLIBS},)
-  ifneq ($(wildcard /opt/local/lib/mysql55/mysql/libmysqlclient.a),)
-      MYSQLLIBS=/opt/local/lib/mysql55/mysql/libmysqlclient.a
-  endif
-endif
-ifeq ($(findstring src/hg/,${CURDIR}),src/hg/)
+
   ifeq (${MYSQLINC},)
-    $(error can not find installed mysql development system)
+    ifneq ($(wildcard /usr/local/mysql/include/mysql.h),)
+	  MYSQLINC=/usr/local/mysql/include
+    endif
+  endif
+  ifeq (${MYSQLINC},)
+    ifneq ($(wildcard /usr/include/mysql/mysql.h),)
+	  MYSQLINC=/usr/include/mysql
+    endif
+  endif
+  ifeq (${MYSQLINC},)
+    ifneq ($(wildcard /opt/local/include/mysql55/mysql/mysql.h),)
+	  MYSQLINC=/opt/local/include/mysql55/mysql
+    endif
+  endif
+  ifeq (${MYSQLLIBS},)
+    ifneq ($(wildcard /usr/lib64/mysql/libmysqlclient.a),)
+	  MYSQLLIBS=/usr/lib64/mysql/libmysqlclient.a
+    endif
+  endif
+  ifeq (${MYSQLLIBS},)
+    ifneq ($(wildcard /usr/local/mysql/lib/libmysqlclient.a),)
+	  MYSQLLIBS=/usr/local/mysql/lib/libmysqlclient.a
+    endif
+  endif
+  ifeq (${MYSQLLIBS},)
+    ifneq ($(wildcard /usr/local/mysql/lib/libmysqlclient.a),)
+	  MYSQLLIBS=/usr/local/mysql/lib/libmysqlclient.a
+    endif
+  endif
+  ifeq (${MYSQLLIBS},)
+    ifneq ($(wildcard /usr/lib64/mysql/libmysqlclient.so),)
+	  MYSQLLIBS=/usr/lib64/mysql/libmysqlclient.so
+    endif
+  endif
+  ifeq (${MYSQLLIBS},)
+    ifneq ($(wildcard /usr/lib/libmysqlclient.a),)
+	  MYSQLLIBS=/usr/lib/libmysqlclient.a
+    endif
+  endif
+  ifeq (${MYSQLLIBS},)
+    ifneq ($(wildcard /opt/local/lib/mysql55/mysql/libmysqlclient.a),)
+	  MYSQLLIBS=/opt/local/lib/mysql55/mysql/libmysqlclient.a
+    endif
+  endif
+  ifeq ($(findstring src/hg/,${CURDIR}),src/hg/)
+      ifeq (${MYSQLINC},)
+	$(error can not find installed mysql development system)
+    endif
+  endif
+    # last resort, hoping the compiler can find it in standard locations
+  ifeq (${MYSQLLIBS},)
+      MYSQLLIBS="-lmysqlclient"
   endif
 endif
-# last resort, hoping the compiler can find it in standard locations
-ifeq (${MYSQLLIBS},)
-  MYSQLLIBS="-lmysqlclient"
+
+# $(info have MYSQLINC: ${MYSQLINC})
+# $(info have MYSQLLIBS: ${MYSQLLIBS})
+
+# OK to add -lstdc++ to all MYSQLLIBS just in case it is
+#    MySQL version 5.6 libraries, but no 'librt' on Mac OSX
+ifeq (${FULLWARN},hgwdev)
+  MYSQLLIBS += /usr/lib/gcc/x86_64-redhat-linux/4.4.4/libstdc++.a /usr/lib/debug/usr/lib64/librt.a
+else
+  ifeq ($(UNAME_S),Darwin)
+    MYSQLLIBS += -lstdc++
+  else
+    MYSQLLIBS += -lstdc++ -lrt
+  endif
 endif
 
 L+=${PNGLIB}
@@ -189,7 +250,6 @@ else
 endif
 
 SYS = $(shell uname -s)
-FULLWARN = $(shell uname -n)
 
 ifeq (${HG_WARN},)
   ifeq (${SYS},Darwin)

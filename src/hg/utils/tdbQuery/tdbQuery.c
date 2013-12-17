@@ -276,7 +276,7 @@ struct fileInfo *org, *orgList = listDirX(root, "*", TRUE);
 struct hash *dbStrictHash = NULL;
 if (clStrict)
     {
-    struct sqlConnection *conn = sqlConnect("mysql");
+    struct sqlConnection *conn = sqlConnect(NULL);
     struct slName *db, *dbList = sqlGetAllDatabase(conn);
     dbStrictHash = hashNew(0);
     for (db = dbList; db != NULL; db = db->next)
@@ -871,6 +871,7 @@ static void rqlStatementOutput(struct rqlStatement *rql, struct tdbRecord *tdb,
  * field with this name at end of output. */
 {
 struct slName *fieldList = rql->fieldList, *field;
+boolean emptyOutput=TRUE;
 for (field = fieldList; field != NULL; field = field->next)
     {
     struct tdbField *r;
@@ -883,10 +884,13 @@ for (field = fieldList; field != NULL; field = field->next)
         else
             match = (strcmp(field->name, r->name) == 0);
         if (match)
+            {
             fprintf(out, "%s %s%c", r->name, r->val,(clOneLine?'|':'\n' ));
+            emptyOutput=FALSE;
+            }
         }
     }
-if (!clNoBlank || clOneLine)
+if (!emptyOutput && (!clNoBlank || clOneLine))
     fprintf(out, "\n");
 }
 

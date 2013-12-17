@@ -7,6 +7,16 @@ kentSrc = ../..
 include ${kentSrc}/inc/localEnvironment.mk
 include ${kentSrc}/inc/common.mk
 
+# to check for Mac OSX Darwin specifics:
+UNAME_S := $(shell uname -s)
+
+# can not build this on Mac OSX - has functions not supported
+ifeq ($(UNAME_S),Darwin)
+  buildRefresh=
+else
+  buildRefresh=refreshNamedSessionCustomTracks
+endif
+
 # List of directories to build for userApps
 UTILS_APPLIST = \
 	bedExtendRanges \
@@ -36,17 +46,17 @@ SCRIPT_FILES = \
 	mergeSortedBed3Plus.pl
 
 # List of directories to build of interest only at UCSC
-DIRS = \
+DIRS = ${buildRefresh} \
 	hubPublicCheck \
 	safePush \
 	toDev64 \
 	automation \
-	refreshNamedSessionCustomTracks \
 	refSeqGet \
 	wigBedToStep \
 	pslUniq \
 	makeTrackIndex \
-	geoMirrorNode
+	geoMirrorNode \
+	mysqlSecurityCheck
 
 TEST_DIRS = \
 	gff3ToGenePred \

@@ -43,46 +43,14 @@ printf("Please enter a URL for a validated manifest file:<BR>");
 printf("URL ");
 cgiMakeTextVar("url", emptyForNull(cgiOptionalString("url")), 80);
 cgiMakeButton("submitUrl", "submit");
+printf("<BR>\n");
+cgiMakeCheckBox("update", FALSE);
+printf(" Update information associated with files that have already been uploaded.");
 printf("<BR>Submission by %s", userEmail);
 edwPrintLogOutButton();
 }
 
-struct edwFile *edwFileInProgress(struct sqlConnection *conn, int submitId)
-/* Return file in submission in process of being uploaded if any. */
-{
-char query[256];
-sqlSafef(query, sizeof(query), "select fileIdInTransit from edwSubmit where id=%u", submitId);
-long long fileId = sqlQuickLongLong(conn, query);
-if (fileId == 0)
-    return NULL;
-sqlSafef(query, sizeof(query), "select * from edwFile where id=%lld", (long long)fileId);
-return edwFileLoadByQuery(conn, query);
-}
-
-int positionInQueue(struct sqlConnection *conn, char *url)
-/* Return position of our URL in submission queue */
-{
-char query[256];
-sqlSafef(query, sizeof(query), "select commandLine from edwSubmitJob where startTime = 0");
-struct sqlResult *sr = sqlGetResult(conn, query);
-char **row;
-int aheadOfUs = -1;
-int pos = 0;
-while ((row = sqlNextRow(sr)) != NULL)
-    {
-    char *line = row[0];
-    char *edwSubmit = nextQuotedWord(&line);
-    char *lineUrl = nextQuotedWord(&line);
-    if (sameOk(edwSubmit, "edwSubmit") && sameOk(url, lineUrl))
-        {
-	aheadOfUs = pos;
-	break;
-	}
-    ++pos;
-    }
-sqlFreeResult(&sr);
-return aheadOfUs;
-}
+static char *stopButtonName = "stopUpload";
 
 long long paraFetchedSoFar(char *path)
 /* Return amount fetched so far. */
@@ -102,9 +70,10 @@ void monitorSubmission(struct sqlConnection *conn)
 char *url = trimSpaces(cgiString("url"));
 cgiMakeHiddenVar("url", url);
 struct edwSubmit *sub = edwMostRecentSubmission(conn, url);
+time_t startTime = 0, endTime = 0, endUploadTime = 0;
 if (sub == NULL)
     {
-    int posInQueue = positionInQueue(conn, url);
+    int posInQueue = edwSubmitPositionInQueue(conn, url, NULL);
     if (posInQueue == 0)
 	printf("%s is first in the submission queue, but upload has not started<BR>\n", url);
     else if (posInQueue > 0)
@@ -116,20 +85,25 @@ if (sub == NULL)
     }
 else
     {
-    time_t startTime = sub->startUploadTime;
-    time_t endUploadTime = sub->endUploadTime;
-    time_t endTime = (endUploadTime ? endUploadTime : edwNow());
+    startTime = sub->startUploadTime;
+    endUploadTime = sub->endUploadTime;
+    endTime = (endUploadTime ? endUploadTime : edwNow());
     int timeSpan = endTime - startTime;
     long long thisUploadSize = sub->byteCount - sub->oldBytes;
     long long curSize = 0;  // Amount of current file we know we've transferred.
 
     /* Print title letting them know if upload is done or in progress. */
     printf("<B>Submission by %s is ", userEmail);
-    if (endUploadTime != 0)  
-        printf("uploaded.");
-    else if (!isEmpty(sub->errorMessage))
+    if (!isEmpty(sub->errorMessage))
 	{
-        printf("having problems...");
+	if (endUploadTime == 0)
+	    printf("having problems...");
+	else
+	    printf("stopped by uploader request.");
+	}
+    else if (endUploadTime != 0)  
+	{
+        printf("uploaded.");
 	}
     else
 	printf("in progress...");
@@ -146,6 +120,8 @@ else
     printf("<B>files count:</B> %d<BR>\n", sub->fileCount);
     if (sub->oldFiles > 0)
 	printf("<B>files already in warehouse:</B> %u<BR>\n", sub->oldFiles);
+    if (sub->metaChangeCount > 0)
+        printf("<B>old files with new tags in this submission</B> %d<BR>", sub->metaChangeCount);
     if (sub->oldFiles != sub->fileCount)
 	{
 	printf("<B>files transferred:</B> %u<BR>\n", sub->newFiles);
@@ -189,37 +165,42 @@ else
         printf("<BR>\n");
 
     /* Report transfer speed if possible */
-    if (timeSpan > 0)
+    if (isEmpty(sub->errorMessage))
 	{
-	printf("<B>transfer speed:</B> ");
-	printLongWithCommas(stdout, (curSize + sub->newBytes)/timeSpan);
-	printf(" bytes/sec<BR>\n");
-	}
-
-    /* Report start time  and duration */
-    printf("<B>submission started:</B> %s<BR>\n", ctime(&startTime));
-    struct dyString *duration = edwFormatDuration(timeSpan);
-
-    /* Try and give them an ETA if we aren't finished */
-    if (endUploadTime == 0 && timeSpan > 0)
-	{
-	printf("<B>time so far:</B> %s<BR>\n", duration->string);
-	double bytesPerSecond = (double)transferredThisTime/timeSpan;
-	long long bytesRemaining = thisUploadSize - curSize - sub->newBytes;
-	if (bytesPerSecond > 0)
+	if (timeSpan > 0)
 	    {
-	    long long estimatedFinish = bytesRemaining/bytesPerSecond;
-	    struct dyString *eta = edwFormatDuration(estimatedFinish);
-	    printf("<B>estimated finish in:</B> %s<BR>\n", eta->string);
+	    printf("<B>transfer speed:</B> ");
+	    printLongWithCommas(stdout, (curSize + sub->newBytes)/timeSpan);
+	    printf(" bytes/sec<BR>\n");
 	    }
-	}
-    else
-        {
-	printf("<B>submission time:</B> %s<BR>\n", duration->string);
-	cgiMakeButton("getUrl", "submit another data set");
+
+	/* Report start time  and duration */
+	printf("<B>submission started:</B> %s<BR>\n", ctime(&startTime));
+	struct dyString *duration = edwFormatDuration(timeSpan);
+
+	/* Try and give them an ETA if we aren't finished */
+	if (endUploadTime == 0 && timeSpan > 0)
+	    {
+	    printf("<B>time so far:</B> %s<BR>\n", duration->string);
+	    double bytesPerSecond = (double)transferredThisTime/timeSpan;
+	    long long bytesRemaining = thisUploadSize - curSize - sub->newBytes;
+	    if (bytesPerSecond > 0)
+		{
+		long long estimatedFinish = bytesRemaining/bytesPerSecond;
+		struct dyString *eta = edwFormatDuration(estimatedFinish);
+		printf("<B>estimated finish in:</B> %s<BR>\n", eta->string);
+		}
+	    }
+	else
+	    {
+	    printf("<B>submission time:</B> %s<BR>\n", duration->string);
+	    cgiMakeButton("getUrl", "submit another data set");
+	    }
 	}
     }
 cgiMakeButton("monitor", "refresh status");
+if (endUploadTime == 0 && isEmpty(sub->errorMessage))
+    cgiMakeButton(stopButtonName, "stop upload");
 printf(" <input type=\"button\" value=\"browse submissions\" "
        "onclick=\"window.location.href='edwWebBrowse';\">\n");
 
@@ -240,21 +221,42 @@ edwMustGetUserFromEmail(conn, userEmail);
 int sd = netUrlMustOpenPastHeader(url);
 close(sd);
 
-edwAddSubmitJob(conn, userEmail, url);
+edwAddSubmitJob(conn, userEmail, url, cgiBoolean("update"));
 
 /* Give the system a half second to react and then put up status info about submission */
 sleep1000(1000);
 monitorSubmission(conn);
-
-#ifdef OLD
-/* Give system a second to react, and then try to put up status info about submission. */
-/* consider replacing this with direct call to monitorSubmission. */
-printf("Submission of %s is in progress....", url);
-cgiMakeButton("monitor", "monitor submission");
-edwPrintLogOutButton();
-cgiMakeHiddenVar("url", url);
-#endif /* OLD */
 }
+
+void stopUpload(struct sqlConnection *conn)
+/* Try and stop current upload. */
+{
+char *url = trimSpaces(cgiString("url"));
+cgiMakeHiddenVar("url", url);
+struct edwSubmit *sub = edwMostRecentSubmission(conn, url);
+if (sub == NULL)
+    {
+    /* Submission hasn't happened yet - remove it from job queue. */
+    unsigned edwSubmitJobId = 0;
+    int posInQueue = edwSubmitPositionInQueue(conn, url, &edwSubmitJobId);
+    if (posInQueue >= 0)
+        {
+	char query[256];
+	sqlSafef(query, sizeof(query), "delete from edwSubmitJob where id=%u", edwSubmitJobId);
+	sqlUpdate(conn, query);
+	printf("Removed submission from %s from job queue\n", url);
+	}
+    }
+else
+    {
+    char query[256];
+    sqlSafef(query, sizeof(query), 
+	"update edwSubmit set errorMessage='Stopped by user.' where id=%u", sub->id);
+    sqlUpdate(conn, query);
+    }
+monitorSubmission(conn);
+}
+
 
 static void localWarn(char *format, va_list args)
 /* A little warning handler to override the one with the button that goes nowhere. */
@@ -265,7 +267,7 @@ printf("<BR>Please use the back button on your web browser, correct the error, a
 }
 
 void doMiddle()
-/* testSimpleCgi - A simple cgi script.. */
+/* doMiddle - put up middle part of web page, not including http and html headers/footers */
 {
 pushWarnHandler(localWarn);
 printf("<FORM ACTION=\"../cgi-bin/edwWebSubmit\" METHOD=GET>\n");
@@ -273,6 +275,8 @@ struct sqlConnection *conn = edwConnectReadWrite(edwDatabase);
 userEmail = edwGetEmailAndVerify();
 if (userEmail == NULL)
     logIn();
+else if (cgiVarExists(stopButtonName))
+    stopUpload(conn);
 else if (cgiVarExists("submitUrl"))
     submitUrl(conn);
 else if (cgiVarExists("monitor"))
