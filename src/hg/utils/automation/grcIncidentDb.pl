@@ -41,7 +41,6 @@ if ($argc < 2) {
     printf STDERR "usage: ./grcIncidentDb.pl -sequenceName <humanSql/chrNN directory> [more directories] > hg19.bed5\n";
     printf STDERR "recognized sequence names: (must be first argument)\n";
     printf STDERR "-GRCh37 == hg19\n";
-    printf STDERR "-GRCh38 == hg38\n";
     printf STDERR "-NCBI36 == hg18\n";
     printf STDERR "-MGSCv37 == mm9\n";
     printf STDERR "-GRCm38 == mm10\n";

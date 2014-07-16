@@ -103,7 +103,7 @@ for( ; alleleNumber < numAlleles; alleleNumber++)
 
     // we have a new allele!
     struct allele *allele;
-    lmAllocVar(lm, allele);
+    AllocVar(allele);
     slAddHead(&variant->alleles, allele);
     allele->variant = variant;
     allele->length = alleleStringLength; 

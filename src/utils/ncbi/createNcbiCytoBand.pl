@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/local/bin/perl
 # File: createNcbiCytoBand
 # Author: Terry Furey
 # Date: 11/14/2003

@@ -83,7 +83,7 @@ optionInit(&argc, argv, optionSpecs);
 db = optionVal("db", NULL);
 bedFile = optionVal("bedIn", NULL);
 fastaFile = optionVal("fastaOut", NULL);
-upCase = optionExists("upCase");
+upCase = optionExists("upcase");
 keepName = optionExists("keepName");
 
 if(db == NULL || bedFile == NULL || fastaFile == NULL)

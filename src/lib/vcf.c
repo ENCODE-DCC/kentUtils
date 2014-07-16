@@ -344,9 +344,6 @@ else if (startsWith("##FILTER=", line) || startsWith("##ALT=", line))
 	// substrs[2] is ID/key, substrs[4] is Description.
 	struct vcfInfoDef *def = vcfFileAlloc(vcff, sizeof(struct vcfInfoDef));
 	def->key = vcfFileCloneSubstr(vcff, line, substrs[2]);
-	// greedy regex pulls in end quote, trim if found:
-	if (line[substrs[4].rm_eo-1] == '"')
-	    line[substrs[4].rm_eo-1] = '\0';
 	def->description = vcfFileCloneSubstr(vcff, line, substrs[4]);
 	slAddHead((isFilter ? &(vcff->filterDefs) : &(vcff->altDefs)), def);
 	}
@@ -1274,10 +1271,9 @@ chopByChar(altAlCopy, ',', &(alleles[1]), alCount-1);
 int i;
 if (allelesHavePaddingBase(alleles, alCount))
     {
-    // Skip padding base (unless we have a symbolic allele):
+    // Skip padding base:
     for (i = 0;  i < alCount;  i++)
-	if (isAllNt(alleles[i], strlen(alleles[i])))
-	    alleles[i]++;
+	alleles[i]++;
     }
 // Having dealt with left padding base, now look for identical bases on the right:
 int trimmedBases = countIdenticalBasesRight(alleles, alCount);

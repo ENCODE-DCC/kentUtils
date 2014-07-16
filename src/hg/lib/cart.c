@@ -493,6 +493,9 @@ if ((row = sqlNextRow(sr)) != NULL)
 	/* Overload settings explicitly passed in via CGI (except for the
 	 * command that sent us here): */
 	loadCgiOverHash(cart, oldVars);
+#ifndef GBROWSE
+	cartCopyCustomTracks(cart);
+#endif /* GBROWSE */
 	if (isNotEmpty(actionVar))
 	    cartRemove(cart, actionVar);
 	hDisconnectCentral(&conn2);
@@ -550,6 +553,9 @@ if (oldVars)
 /* Overload settings explicitly passed in via CGI (except for the
  * command that sent us here): */
 loadCgiOverHash(cart, oldVars);
+#ifndef GBROWSE
+cartCopyCustomTracks(cart);
+#endif /* GBROWSE */
 
 if (isNotEmpty(actionVar))
     cartRemove(cart, actionVar);
@@ -665,7 +671,6 @@ cartJustify(cart, oldVars);
 /* If some CGI other than hgSession been passed hgSession loading instructions,
  * apply those to cart before we do anything else.  (If this is hgSession,
  * let it handle the settings so it can display feedback to the user.) */
-boolean didSessionLoad = FALSE;
 if (! (cgiScriptName() && endsWith(cgiScriptName(), "hgSession")))
     {
     if (cartVarExists(cart, hgsDoOtherUser))
@@ -678,7 +683,6 @@ if (! (cgiScriptName() && endsWith(cgiScriptName(), "hgSession")))
 			    oldVars, hgsDoOtherUser);
 	hDisconnectCentral(&conn2);
 	cartTrace(cart, "after cartLUS", conn);
-	didSessionLoad = TRUE;
 	}
     else if (cartVarExists(cart, hgsDoLoadUrl))
 	{
@@ -688,7 +692,6 @@ if (! (cgiScriptName() && endsWith(cgiScriptName(), "hgSession")))
 	cartLoadSettings(lf, cart, oldVars, hgsDoLoadUrl);
 	lineFileClose(&lf);
 	cartTrace(cart, "after cartLS", conn);
-	didSessionLoad = TRUE;
 	}
     }
 #endif /* GBROWSE */
@@ -699,11 +702,6 @@ if (cartVarExists(cart, hgHubDoDisconnect))
     doDisconnectHub(cart);
 
 char *newDatabase = hubConnectLoadHubs(cart);
-
-#ifndef GBROWSE
-if (didSessionLoad)
-    cartCopyCustomTracks(cart);
-#endif /* GBROWSE */
 
 if (newDatabase != NULL)
     {
@@ -1449,22 +1447,9 @@ if (sameWord("HTTPHOST", domain))
 
 char userIdKey[256];
 cartDbSecureId(userIdKey, sizeof userIdKey, cart->userInfo);
-// Some users reported blank cookie values. Do we see that here?
-if (sameString(userIdKey,"")) // make sure we do not write any blank cookies.
-    {
-    // Be sure we do not lose this message.
-    // Because the error happens so early we cannot trust that the warn and error handlers
-    // are setup correctly and working.
-    verbose(1, "unexpected error in cartWriteCookie: userId string is empty.");
-    dumpStack( "unexpected error in cartWriteCookie: userId string is empty.");
-    warn(      "unexpected error in cartWriteCookie: userId string is empty.");
-    }
-else
-    {
-    printf("Set-Cookie: %s=%s; path=/; domain=%s; expires=%s\r\n",
-	    cookieName, userIdKey, domain, cookieDate());
-    }
-if (geoMirrorEnabled())
+printf("Set-Cookie: %s=%s; path=/; domain=%s; expires=%s\r\n",
+        cookieName, userIdKey, domain, cookieDate());
+if(geoMirrorEnabled())
     {
     // This occurs after the user has manually choosen to go back to the original site; we store redirect value into a cookie so we 
     // can use it in subsequent hgGateway requests before loading the user's cart
@@ -2097,16 +2082,6 @@ if (a == NULL)
     return defaultVal;
 else
     return atof(a);
-}
-
-boolean cartOrTdbBoolean(struct cart *cart, struct trackDb *tdb, char *var, boolean defaultVal)
-/* Look first in cart, then in trackDb for var.  Return defaultVal if not found. */
-{
-boolean tdbVal = defaultVal;
-char *tdbSetting = trackDbSetting(tdb, var);
-if (tdbSetting != NULL)
-    tdbVal = trackDbSettingClosestToHomeOn(tdb, var);
-return cartUsualBooleanClosestToHome(cart, tdb, isNameAtParentLevel(tdb, var), var, tdbVal);
 }
 
 // These macros allow toggling warn messages to NOOPS when no longer debugging

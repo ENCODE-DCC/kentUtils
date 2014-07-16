@@ -1,6 +1,5 @@
 # UCSC<tab>common<tab>Scientific<tab>group<tab>clade<tab>orderKey
 # dbase    name       name           menu
-hg38	Human	Homo sapiens	primate	primate	130
 hg19	Human	Homo sapiens	primate	primate	140
 panTro4	Chimp	Pan troglodytes	primate	primate	229
 panPan1	Bonobo	Pan paniscus	primate	primate	245
@@ -133,7 +132,7 @@ mesUni1	Brown roatelo	Mesitornis unicolor	vertebrate	aves	4363
 opiHoa1	Hoatzin	Opisthocomus hoazin	vertebrate	aves	4363
 tauEry1	Red crested turaco	Tauraco erythrolophus	vertebrate	aves	4363
 pelCri1	Dalmatian pelican	Pelecanus crispus	vertebrate	aves	4363
-phaCar1	Great cormorant	Phalacrocorax carbo	vertebrate	aves	4363
+phaCar1	Bar tailed trogon	Phalacrocorax carbo	vertebrate	4363
 phaLep1	White-tailed tropicbird	Phaethon lepturus	vertebrate	aves	4363
 phoRub1	American flamingo	Phoenicopterus ruber ruber	vertebrate	aves	4363
 picPub1	Downy woodpecker	Picoides pubescens	vertebrate	aves	4363
@@ -148,9 +147,7 @@ melUnd1	Budgerigar	Melopsittacus undulatus	vertebrate	aves	4375
 pytBiv1	Burmese python	Python bivittatus	vertebrate	sauria	4378
 allMis1	American alligator	Alligator mississippiensis	vertebrate	sauria	4380
 allSin1	Chinese alligator	Alligator sinensis	vertebrate	sauria	4382
-croPor0	Crocodile	Crocodylus porosus	vertebrate	sauria	4385
 croPor1	Crocodile	Crocodylus porosus	vertebrate	sauria	4385
-gavGan0	Gharial	Gavialis gangeticus	vertebrate	sauria	4387
 gavGan1	Gharial	Gavialis gangeticus	vertebrate	sauria	4387
 anoCar2	Lizard	Anolis carolinensis	vertebrate	sauria	4390
 pytMolBiv1	Burmese python	Python molurus bivittatus	vertebrate	sauria	4392
