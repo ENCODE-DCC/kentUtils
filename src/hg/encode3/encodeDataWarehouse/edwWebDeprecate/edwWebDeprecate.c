@@ -1,10 +1,13 @@
 /* edwWebDeprecate - A cgi script to mark files as deprecated.. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
 #include "options.h"
 #include "htmshell.h"
-#include "errabort.h"
+#include "errAbort.h"
 #include "cheapcgi.h"
 #include "jksql.h"
 #include "encodeDataWarehouse.h"
@@ -23,6 +26,11 @@ errAbort(
   "   edwWebDeprecate cgiVar=value cgiVar2=value2\n"
   );
 }
+
+boolean okToShowAllowBox(struct sqlConnection *conn, char *userEmail)
+{
+return edwUserIsAdmin(conn,userEmail);
+};
 
 boolean checkOwnership(struct sqlConnection *conn, int fId, char *userEmail)
 /* Return true if file to be deprecated was submitted by this user. */
@@ -63,11 +71,13 @@ printf("<BR>");
 printf("Please enter in reason for deprecating files:<BR>");
 cgiMakeTextArea("reason", reason, 4, 60);
 printf("<BR>");
-printf("Allow me to deprecate files not uploaded by me:  ");
-cgiMakeCheckBox("allowBox", FALSE);
-printf("<BR>");
+if (okToShowAllowBox(conn, userEmail))
+    {
+    printf("Allow me to deprecate files not uploaded by me:  ");
+    cgiMakeCheckBox("allowBox", FALSE);
+    printf("<BR>");
+    }
 cgiMakeButton("submit", "submit");
-edwPrintLogOutButton();
 }
 
 static void localWarn(char *format, va_list args)
@@ -113,10 +123,11 @@ else
    for (acc = accList; acc != NULL; acc = acc->next)
        {
        char *licensePlate = acc->name;
-       if (!startsWith(edwLicensePlatePrefix, licensePlate))
+       char *prefix = edwLicensePlateHead(conn);
+       if (!startsWith(prefix, licensePlate))
            {
 	   ok = FALSE;
-	   warn("%s is not an accession, doesn't start with %s", licensePlate, edwLicensePlatePrefix);
+	   warn("%s is not an accession, doesn't start with %s", licensePlate, prefix);
 	   break;
 	   }
 	char query[256];
@@ -134,7 +145,8 @@ else
 	    ok = FALSE;
 	    warn("You can not deprecate %s which was originally uploaded by %s.\n",
 	    licensePlate, edwFindOwnerNameFromFileId(conn, id));
-	    warn("Please click the check box below to override this rule.");
+	    if (okToShowAllowBox(conn, userEmail))
+		warn("Please click the check box below to override this rule.");
 	    break;
 	    }
 

@@ -1,4 +1,7 @@
 /* bigBedInfo - Show information about a bigBed file.. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -107,10 +110,16 @@ if (optionExists("as"))
     }
 struct bbiSummaryElement sum = bbiTotalSummary(bbi);
 printLabelAndLongNumber("basesCovered", sum.validCount);
-printf("meanDepth (of bases covered): %f\n", sum.sumData/sum.validCount);
+double meanDepth = 0, depthStd = 0;
+if (sum.validCount > 0)
+    {
+    meanDepth = sum.sumData/sum.validCount;
+    depthStd = calcStdFromSums(sum.sumData, sum.sumSquares, sum.validCount);
+    }
+printf("meanDepth (of bases covered): %f\n", meanDepth);
 printf("minDepth: %f\n", sum.minVal);
 printf("maxDepth: %f\n", sum.maxVal);
-printf("std of depth: %f\n", calcStdFromSums(sum.sumData, sum.sumSquares, sum.validCount));
+printf("std of depth: %f\n", depthStd);
 }
 
 int main(int argc, char *argv[])

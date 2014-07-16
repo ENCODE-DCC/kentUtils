@@ -1,4 +1,7 @@
 /* snpNcbiToUcsc - Reformat NCBI SNP field values into UCSC, and flag exceptions.. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "basicBed.h"
 #include "dnaseq.h"
@@ -1511,8 +1514,11 @@ else if (sameString(class, "deletion") || sameString(class, "insertion") ||
 	flagIupac(observed);
 	}
     else
-	lineFileAbort(lf, "Encountered something that doesn't fit "
+	{
+	warn("Encountered something that doesn't fit "
 		      "observedIndelFormat: %s", observed);
+	writeException(ObservedWrongFormat);
+	}
     }
 else if (sameString(class, "het"))
     {

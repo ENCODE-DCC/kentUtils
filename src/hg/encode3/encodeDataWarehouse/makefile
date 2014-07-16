@@ -14,13 +14,22 @@ UTIL_DIRS = \
     edwChangeFormat \
     edwCorrectFileTags \
     edwCreateUser \
+    edwFakeManifestFromSubmit \
+    edwJob \
     edwMakeContaminationQa \
     edwMakeEnrichments \
+    edwMakePairedEndQa \
+    edwMakeRepeatQa \
     edwMakeReplicateQa \
     edwMakeValidFile \
+    edwQaEvaluate \
     edwReallyRemoveFiles \
+    edwRetryJob \
     edwRunDaemon \
-    edwSubmit
+    edwRunOnIds \
+    edwRsyncEdwUser \
+    edwSubmit \
+    utils
 
 CGI_DIRS = \
     edwScriptSubmit \
@@ -31,34 +40,42 @@ CGI_DIRS = \
     edwWebCreateUser \
     edwWebDeprecate \
     edwWebRegisterScript \
-    edwWebSubmit
+    edwWebSubmit \
+    edwWebXSendFile
 
 TEST_DIRS = \
 	encode2BedDoctor 
 
-all:: utils
+utils: edwLib
+	${MAKE} buildUtils
 
 edwLib:
-	(cd lib && ${MAKE})
+	cd lib && ${MAKE}
 
-
-utils: edwLib $(UTIL_DIRS:%=%.utils)
-%.utils:
-	(cd $* && $(MAKE))
+buildUtils: $(UTIL_DIRS:%=%.buildUtils)
+%.buildUtils:
+	cd $* && $(MAKE)
 
 test::	${TEST_DIRS:%=%.test}
 %.test:
-	(cd $* && ${MAKE} test)
+	cd $* && ${MAKE} test
 
 clean:: $(USE_DIRS:%=%.clean)
 	- find . -name '*.o' -exec rm {} \;
+	cd lib && ${MAKE} clean
 %.clean:
 	(cd $* && ${MAKE} clean)
 
-cgi:: edwLib $(CGI_DIRS:%=%.cgi)
-%.cgi:
-	(cd $* && ${MAKE})
+cgi:: edwLib
+	${MAKE} buildCgi
 
-alpha:: $(CGI_DIRS:%=%.alpha)
-%.alpha:
+buildCgi:: $(CGI_DIRS:%=%.buildCgi)
+%.buildCgi:
+	cd $* && ${MAKE}
+
+alpha:: edwLib
+	${MAKE} buildAlpha
+
+buildAlpha:: $(CGI_DIRS:%=%.buildAlpha)
+%.buildAlpha:
 	(cd $* && ${MAKE} alpha)

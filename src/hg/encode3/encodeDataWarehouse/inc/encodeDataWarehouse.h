@@ -2,11 +2,82 @@
  * generated encodeDataWarehouse.c and encodeDataWarehouse.sql.  This header links the database and
  * the RAM representation of objects. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #ifndef ENCODEDATAWAREHOUSE_H
 #define ENCODEDATAWAREHOUSE_H
 
 #include "jksql.h"
-#define EDWUSER_NUM_COLS 2
+#define EDWSETTINGS_NUM_COLS 3
+
+extern char *edwSettingsCommaSepFieldNames;
+
+struct edwSettings
+/* Settings used to configure warehouse */
+    {
+    struct edwSettings *next;  /* Next in singly linked list. */
+    unsigned id;	/* Settings ID */
+    char *name;	/* Settings name, can't be reused */
+    char *val;	/* Settings value, some undefined but not huge thing */
+    };
+
+void edwSettingsStaticLoad(char **row, struct edwSettings *ret);
+/* Load a row from edwSettings table into ret.  The contents of ret will
+ * be replaced at the next call to this function. */
+
+struct edwSettings *edwSettingsLoadByQuery(struct sqlConnection *conn, char *query);
+/* Load all edwSettings from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwSettingsFreeList(). */
+
+void edwSettingsSaveToDb(struct sqlConnection *conn, struct edwSettings *el, char *tableName, int updateSize);
+/* Save edwSettings as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+
+struct edwSettings *edwSettingsLoad(char **row);
+/* Load a edwSettings from row fetched with select * from edwSettings
+ * from database.  Dispose of this with edwSettingsFree(). */
+
+struct edwSettings *edwSettingsLoadAll(char *fileName);
+/* Load all edwSettings from whitespace-separated file.
+ * Dispose of this with edwSettingsFreeList(). */
+
+struct edwSettings *edwSettingsLoadAllByChar(char *fileName, char chopper);
+/* Load all edwSettings from chopper separated file.
+ * Dispose of this with edwSettingsFreeList(). */
+
+#define edwSettingsLoadAllByTab(a) edwSettingsLoadAllByChar(a, '\t');
+/* Load all edwSettings from tab separated file.
+ * Dispose of this with edwSettingsFreeList(). */
+
+struct edwSettings *edwSettingsCommaIn(char **pS, struct edwSettings *ret);
+/* Create a edwSettings out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwSettings */
+
+void edwSettingsFree(struct edwSettings **pEl);
+/* Free a single dynamically allocated edwSettings such as created
+ * with edwSettingsLoad(). */
+
+void edwSettingsFreeList(struct edwSettings **pList);
+/* Free a list of dynamically allocated edwSettings's */
+
+void edwSettingsOutput(struct edwSettings *el, FILE *f, char sep, char lastSep);
+/* Print out edwSettings.  Separate fields with sep. Follow last field with lastSep. */
+
+#define edwSettingsTabOut(el,f) edwSettingsOutput(el,f,'\t','\n');
+/* Print out edwSettings as a line in a tab-separated file. */
+
+#define edwSettingsCommaOut(el,f) edwSettingsOutput(el,f,',',',');
+/* Print out edwSettings as a comma separated list including final comma. */
+
+#define EDWUSER_NUM_COLS 4
 
 extern char *edwUserCommaSepFieldNames;
 
@@ -16,6 +87,8 @@ struct edwUser
     struct edwUser *next;  /* Next in singly linked list. */
     unsigned id;	/* Autoincremented user ID */
     char *email;	/* Email address - required */
+    char uuid[38];	/* Help to synchronize us with Stanford. */
+    signed char isAdmin;	/* If true the use can modify other people's files too. */
     };
 
 void edwUserStaticLoad(char **row, struct edwUser *ret);
@@ -526,7 +599,7 @@ void edwSubscriberOutput(struct edwSubscriber *el, FILE *f, char sep, char lastS
 #define edwSubscriberCommaOut(el,f) edwSubscriberOutput(el,f,',',',');
 /* Print out edwSubscriber as a comma separated list including final comma. */
 
-#define EDWASSEMBLY_NUM_COLS 7
+#define EDWASSEMBLY_NUM_COLS 8
 
 extern char *edwAssemblyCommaSepFieldNames;
 
@@ -541,6 +614,7 @@ struct edwAssembly
     unsigned twoBitId;	/* File ID of associated twoBit file */
     long long baseCount;	/* Count of bases including N's */
     long long realBaseCount;	/* Count of non-N bases in assembly */
+    unsigned seqCount;	/* Number of chromosomes or other distinct sequences in assembly */
     };
 
 void edwAssemblyStaticLoad(char **row, struct edwAssembly *ret);
@@ -598,7 +672,149 @@ void edwAssemblyOutput(struct edwAssembly *el, FILE *f, char sep, char lastSep);
 #define edwAssemblyCommaOut(el,f) edwAssemblyOutput(el,f,',',',');
 /* Print out edwAssembly as a comma separated list including final comma. */
 
-#define EDWVALIDFILE_NUM_COLS 22
+#define EDWBIOSAMPLE_NUM_COLS 4
+
+extern char *edwBiosampleCommaSepFieldNames;
+
+struct edwBiosample
+/* A biosample - not much info here, just enough to drive analysis pipeline */
+    {
+    struct edwBiosample *next;  /* Next in singly linked list. */
+    unsigned id;	/* Biosample id */
+    char *term;	/* Human readable.  Shared with ENCODE2. */
+    unsigned taxon;	/* NCBI taxon number - 9606 for human. */
+    char *sex;	/* One letter code: M male, F female, B both, U unknown */
+    };
+
+void edwBiosampleStaticLoad(char **row, struct edwBiosample *ret);
+/* Load a row from edwBiosample table into ret.  The contents of ret will
+ * be replaced at the next call to this function. */
+
+struct edwBiosample *edwBiosampleLoadByQuery(struct sqlConnection *conn, char *query);
+/* Load all edwBiosample from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwBiosampleFreeList(). */
+
+void edwBiosampleSaveToDb(struct sqlConnection *conn, struct edwBiosample *el, char *tableName, int updateSize);
+/* Save edwBiosample as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+
+struct edwBiosample *edwBiosampleLoad(char **row);
+/* Load a edwBiosample from row fetched with select * from edwBiosample
+ * from database.  Dispose of this with edwBiosampleFree(). */
+
+struct edwBiosample *edwBiosampleLoadAll(char *fileName);
+/* Load all edwBiosample from whitespace-separated file.
+ * Dispose of this with edwBiosampleFreeList(). */
+
+struct edwBiosample *edwBiosampleLoadAllByChar(char *fileName, char chopper);
+/* Load all edwBiosample from chopper separated file.
+ * Dispose of this with edwBiosampleFreeList(). */
+
+#define edwBiosampleLoadAllByTab(a) edwBiosampleLoadAllByChar(a, '\t');
+/* Load all edwBiosample from tab separated file.
+ * Dispose of this with edwBiosampleFreeList(). */
+
+struct edwBiosample *edwBiosampleCommaIn(char **pS, struct edwBiosample *ret);
+/* Create a edwBiosample out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwBiosample */
+
+void edwBiosampleFree(struct edwBiosample **pEl);
+/* Free a single dynamically allocated edwBiosample such as created
+ * with edwBiosampleLoad(). */
+
+void edwBiosampleFreeList(struct edwBiosample **pList);
+/* Free a list of dynamically allocated edwBiosample's */
+
+void edwBiosampleOutput(struct edwBiosample *el, FILE *f, char sep, char lastSep);
+/* Print out edwBiosample.  Separate fields with sep. Follow last field with lastSep. */
+
+#define edwBiosampleTabOut(el,f) edwBiosampleOutput(el,f,'\t','\n');
+/* Print out edwBiosample as a line in a tab-separated file. */
+
+#define edwBiosampleCommaOut(el,f) edwBiosampleOutput(el,f,',',',');
+/* Print out edwBiosample as a comma separated list including final comma. */
+
+#define EDWEXPERIMENT_NUM_COLS 8
+
+extern char *edwExperimentCommaSepFieldNames;
+
+struct edwExperiment
+/* An experiment - ideally will include a couple of biological replicates. Downloaded from Stanford. */
+    {
+    struct edwExperiment *next;  /* Next in singly linked list. */
+    char accession[17];	/* Something like ENCSR000CFA. ID shared with Stanford. */
+    char *dataType;	/* Something liek RNA-seq, DNase-seq, ChIP-seq. Computed at UCSC. */
+    char *lab;	/* Lab PI name and institution. Is lab.title at Stanford. */
+    char *biosample;	/* Cell line name, tissue source, etc. Is biosample_term_name at Stanford. */
+    char *rfa;	/* Something like 'ENCODE2' or 'ENCODE3'.  Is award.rfa at Stanford. */
+    char *assayType;	/* Similar to dataType. Is assay_term_name at Stanford. */
+    char *ipTarget;	/* The target for the immunoprecipitation in ChIP & RIP. */
+    char *control;	/* Primary control for experiment.  Usually another experiment accession. */
+    };
+
+void edwExperimentStaticLoad(char **row, struct edwExperiment *ret);
+/* Load a row from edwExperiment table into ret.  The contents of ret will
+ * be replaced at the next call to this function. */
+
+struct edwExperiment *edwExperimentLoadByQuery(struct sqlConnection *conn, char *query);
+/* Load all edwExperiment from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwExperimentFreeList(). */
+
+void edwExperimentSaveToDb(struct sqlConnection *conn, struct edwExperiment *el, char *tableName, int updateSize);
+/* Save edwExperiment as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+
+struct edwExperiment *edwExperimentLoad(char **row);
+/* Load a edwExperiment from row fetched with select * from edwExperiment
+ * from database.  Dispose of this with edwExperimentFree(). */
+
+struct edwExperiment *edwExperimentLoadAll(char *fileName);
+/* Load all edwExperiment from whitespace-separated file.
+ * Dispose of this with edwExperimentFreeList(). */
+
+struct edwExperiment *edwExperimentLoadAllByChar(char *fileName, char chopper);
+/* Load all edwExperiment from chopper separated file.
+ * Dispose of this with edwExperimentFreeList(). */
+
+#define edwExperimentLoadAllByTab(a) edwExperimentLoadAllByChar(a, '\t');
+/* Load all edwExperiment from tab separated file.
+ * Dispose of this with edwExperimentFreeList(). */
+
+struct edwExperiment *edwExperimentCommaIn(char **pS, struct edwExperiment *ret);
+/* Create a edwExperiment out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwExperiment */
+
+void edwExperimentFree(struct edwExperiment **pEl);
+/* Free a single dynamically allocated edwExperiment such as created
+ * with edwExperimentLoad(). */
+
+void edwExperimentFreeList(struct edwExperiment **pList);
+/* Free a list of dynamically allocated edwExperiment's */
+
+void edwExperimentOutput(struct edwExperiment *el, FILE *f, char sep, char lastSep);
+/* Print out edwExperiment.  Separate fields with sep. Follow last field with lastSep. */
+
+#define edwExperimentTabOut(el,f) edwExperimentOutput(el,f,'\t','\n');
+/* Print out edwExperiment as a line in a tab-separated file. */
+
+#define edwExperimentCommaOut(el,f) edwExperimentOutput(el,f,',',',');
+/* Print out edwExperiment as a comma separated list including final comma. */
+
+#define EDWVALIDFILE_NUM_COLS 24
 
 extern char *edwValidFileCommaSepFieldNames;
 
@@ -624,10 +840,12 @@ struct edwValidFile
     double mapRatio;	/* Proportion of items that map to genome */
     double sampleCoverage;	/* Proportion of assembly covered by at least one item in sample */
     double depth;	/* Estimated genome-equivalents covered by possibly overlapping data */
-    signed char singleQaStatus;	/* 0 for untested, 1 for pass, -1 for fail */
-    signed char replicateQaStatus;	/* 0 for untested, 1 for pass, -1 for fail */
+    signed char singleQaStatus;	/* 0 = untested, 1 =  pass, -1 = fail, 2 = forced pass, -2 = forced fail */
+    signed char replicateQaStatus;	/* 0 = untested, 1 = pass, -1 = fail, 2 = forced pass, -2 = forced fail */
     char *technicalReplicate;	/* Manifest's technical_replicate tag. Values 1,2,3... pooled or '' */
     char *pairedEnd;	/* The paired_end tag from the manifest.  Values 1,2 or '' */
+    signed char qaVersion;	/* Version of QA pipeline making status decisions */
+    double uniqueMapRatio;	/* Fraction of reads that map uniquely to genome for bams and fastqs */
     };
 
 void edwValidFileStaticLoad(char **row, struct edwValidFile *ret);
@@ -774,6 +992,157 @@ void edwFastqFileOutput(struct edwFastqFile *el, FILE *f, char sep, char lastSep
 
 #define edwFastqFileCommaOut(el,f) edwFastqFileOutput(el,f,',',',');
 /* Print out edwFastqFile as a comma separated list including final comma. */
+
+#define EDWBAMFILE_NUM_COLS 17
+
+extern char *edwBamFileCommaSepFieldNames;
+
+struct edwBamFile
+/* Info on what is in a bam file beyond whet's in edwValidFile */
+    {
+    struct edwBamFile *next;  /* Next in singly linked list. */
+    unsigned id;	/* ID in this table */
+    unsigned fileId;	/* ID in edwFile table. */
+    signed char isPaired;	/* Set to 1 if paired reads, 0 if single */
+    signed char isSortedByTarget;	/* Set to 1 if sorted by target,pos */
+    long long readCount;	/* # of reads in file */
+    long long readBaseCount;	/* # of bases in all reads added up */
+    long long mappedCount;	/* # of reads that map */
+    long long uniqueMappedCount;	/* # of reads that map to a unique position */
+    double readSizeMean;	/* Average read size */
+    double readSizeStd;	/* Standard deviation of read size */
+    int readSizeMin;	/* Minimum read size */
+    int readSizeMax;	/* Maximum read size */
+    int u4mReadCount;	/* Uniquely-mapped 4 million read actual read # (usually 4M) */
+    int u4mUniquePos;	/* Unique positions in target of the 4M reads that map to single pos */
+    double u4mUniqueRatio;	/* u4mUniqPos/u4mReadCount - measures library diversity */
+    long long targetBaseCount;	/* Count of bases in mapping target */
+    unsigned targetSeqCount;	/* Number of chromosomes or other distinct sequences in mapping target */
+    };
+
+void edwBamFileStaticLoad(char **row, struct edwBamFile *ret);
+/* Load a row from edwBamFile table into ret.  The contents of ret will
+ * be replaced at the next call to this function. */
+
+struct edwBamFile *edwBamFileLoadByQuery(struct sqlConnection *conn, char *query);
+/* Load all edwBamFile from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwBamFileFreeList(). */
+
+void edwBamFileSaveToDb(struct sqlConnection *conn, struct edwBamFile *el, char *tableName, int updateSize);
+/* Save edwBamFile as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+
+struct edwBamFile *edwBamFileLoad(char **row);
+/* Load a edwBamFile from row fetched with select * from edwBamFile
+ * from database.  Dispose of this with edwBamFileFree(). */
+
+struct edwBamFile *edwBamFileLoadAll(char *fileName);
+/* Load all edwBamFile from whitespace-separated file.
+ * Dispose of this with edwBamFileFreeList(). */
+
+struct edwBamFile *edwBamFileLoadAllByChar(char *fileName, char chopper);
+/* Load all edwBamFile from chopper separated file.
+ * Dispose of this with edwBamFileFreeList(). */
+
+#define edwBamFileLoadAllByTab(a) edwBamFileLoadAllByChar(a, '\t');
+/* Load all edwBamFile from tab separated file.
+ * Dispose of this with edwBamFileFreeList(). */
+
+struct edwBamFile *edwBamFileCommaIn(char **pS, struct edwBamFile *ret);
+/* Create a edwBamFile out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwBamFile */
+
+void edwBamFileFree(struct edwBamFile **pEl);
+/* Free a single dynamically allocated edwBamFile such as created
+ * with edwBamFileLoad(). */
+
+void edwBamFileFreeList(struct edwBamFile **pList);
+/* Free a list of dynamically allocated edwBamFile's */
+
+void edwBamFileOutput(struct edwBamFile *el, FILE *f, char sep, char lastSep);
+/* Print out edwBamFile.  Separate fields with sep. Follow last field with lastSep. */
+
+#define edwBamFileTabOut(el,f) edwBamFileOutput(el,f,'\t','\n');
+/* Print out edwBamFile as a line in a tab-separated file. */
+
+#define edwBamFileCommaOut(el,f) edwBamFileOutput(el,f,',',',');
+/* Print out edwBamFile as a comma separated list including final comma. */
+
+#define EDWQAFAIL_NUM_COLS 4
+
+extern char *edwQaFailCommaSepFieldNames;
+
+struct edwQaFail
+/* Record of a QA failure. */
+    {
+    struct edwQaFail *next;  /* Next in singly linked list. */
+    unsigned id;	/* ID of failure */
+    unsigned fileId;	/* File that failed */
+    unsigned qaVersion;	/* QA pipeline version */
+    char *reason;	/* reason for failure */
+    };
+
+void edwQaFailStaticLoad(char **row, struct edwQaFail *ret);
+/* Load a row from edwQaFail table into ret.  The contents of ret will
+ * be replaced at the next call to this function. */
+
+struct edwQaFail *edwQaFailLoadByQuery(struct sqlConnection *conn, char *query);
+/* Load all edwQaFail from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwQaFailFreeList(). */
+
+void edwQaFailSaveToDb(struct sqlConnection *conn, struct edwQaFail *el, char *tableName, int updateSize);
+/* Save edwQaFail as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+
+struct edwQaFail *edwQaFailLoad(char **row);
+/* Load a edwQaFail from row fetched with select * from edwQaFail
+ * from database.  Dispose of this with edwQaFailFree(). */
+
+struct edwQaFail *edwQaFailLoadAll(char *fileName);
+/* Load all edwQaFail from whitespace-separated file.
+ * Dispose of this with edwQaFailFreeList(). */
+
+struct edwQaFail *edwQaFailLoadAllByChar(char *fileName, char chopper);
+/* Load all edwQaFail from chopper separated file.
+ * Dispose of this with edwQaFailFreeList(). */
+
+#define edwQaFailLoadAllByTab(a) edwQaFailLoadAllByChar(a, '\t');
+/* Load all edwQaFail from tab separated file.
+ * Dispose of this with edwQaFailFreeList(). */
+
+struct edwQaFail *edwQaFailCommaIn(char **pS, struct edwQaFail *ret);
+/* Create a edwQaFail out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwQaFail */
+
+void edwQaFailFree(struct edwQaFail **pEl);
+/* Free a single dynamically allocated edwQaFail such as created
+ * with edwQaFailLoad(). */
+
+void edwQaFailFreeList(struct edwQaFail **pList);
+/* Free a list of dynamically allocated edwQaFail's */
+
+void edwQaFailOutput(struct edwQaFail *el, FILE *f, char sep, char lastSep);
+/* Print out edwQaFail.  Separate fields with sep. Follow last field with lastSep. */
+
+#define edwQaFailTabOut(el,f) edwQaFailOutput(el,f,'\t','\n');
+/* Print out edwQaFail as a line in a tab-separated file. */
+
+#define edwQaFailCommaOut(el,f) edwQaFailOutput(el,f,',',',');
+/* Print out edwQaFail as a comma separated list including final comma. */
 
 #define EDWQAENRICHTARGET_NUM_COLS 5
 
@@ -1340,7 +1709,164 @@ void edwQaPairedEndFastqOutput(struct edwQaPairedEndFastq *el, FILE *f, char sep
 #define edwQaPairedEndFastqCommaOut(el,f) edwQaPairedEndFastqOutput(el,f,',',',');
 /* Print out edwQaPairedEndFastq as a comma separated list including final comma. */
 
-#define EDWJOB_NUM_COLS 6
+#define EDWQAWIGSPOT_NUM_COLS 9
+
+extern char *edwQaWigSpotCommaSepFieldNames;
+
+struct edwQaWigSpot
+/* Information about proportion of signal in a wig that lands under spots in a peak or bed file */
+    {
+    struct edwQaWigSpot *next;  /* Next in singly linked list. */
+    unsigned id;	/* Id of this wig/spot intersection */
+    unsigned wigId;	/* Id of bigWig file */
+    unsigned spotId;	/* Id of a bigBed file probably broadPeak or narrowPeak */
+    double spotRatio;	/* Ratio of signal in spots to total signal,  between 0 and 1 */
+    double enrichment;	/* Enrichment in spots compared to genome overall */
+    long long basesInGenome;	/* Number of bases in genome */
+    long long basesInSpots;	/* Number of bases in spots */
+    double sumSignal;	/* Total signal */
+    double spotSumSignal;	/* Total signal in spots */
+    };
+
+void edwQaWigSpotStaticLoad(char **row, struct edwQaWigSpot *ret);
+/* Load a row from edwQaWigSpot table into ret.  The contents of ret will
+ * be replaced at the next call to this function. */
+
+struct edwQaWigSpot *edwQaWigSpotLoadByQuery(struct sqlConnection *conn, char *query);
+/* Load all edwQaWigSpot from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwQaWigSpotFreeList(). */
+
+void edwQaWigSpotSaveToDb(struct sqlConnection *conn, struct edwQaWigSpot *el, char *tableName, int updateSize);
+/* Save edwQaWigSpot as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+
+struct edwQaWigSpot *edwQaWigSpotLoad(char **row);
+/* Load a edwQaWigSpot from row fetched with select * from edwQaWigSpot
+ * from database.  Dispose of this with edwQaWigSpotFree(). */
+
+struct edwQaWigSpot *edwQaWigSpotLoadAll(char *fileName);
+/* Load all edwQaWigSpot from whitespace-separated file.
+ * Dispose of this with edwQaWigSpotFreeList(). */
+
+struct edwQaWigSpot *edwQaWigSpotLoadAllByChar(char *fileName, char chopper);
+/* Load all edwQaWigSpot from chopper separated file.
+ * Dispose of this with edwQaWigSpotFreeList(). */
+
+#define edwQaWigSpotLoadAllByTab(a) edwQaWigSpotLoadAllByChar(a, '\t');
+/* Load all edwQaWigSpot from tab separated file.
+ * Dispose of this with edwQaWigSpotFreeList(). */
+
+struct edwQaWigSpot *edwQaWigSpotCommaIn(char **pS, struct edwQaWigSpot *ret);
+/* Create a edwQaWigSpot out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwQaWigSpot */
+
+void edwQaWigSpotFree(struct edwQaWigSpot **pEl);
+/* Free a single dynamically allocated edwQaWigSpot such as created
+ * with edwQaWigSpotLoad(). */
+
+void edwQaWigSpotFreeList(struct edwQaWigSpot **pList);
+/* Free a list of dynamically allocated edwQaWigSpot's */
+
+void edwQaWigSpotOutput(struct edwQaWigSpot *el, FILE *f, char sep, char lastSep);
+/* Print out edwQaWigSpot.  Separate fields with sep. Follow last field with lastSep. */
+
+#define edwQaWigSpotTabOut(el,f) edwQaWigSpotOutput(el,f,'\t','\n');
+/* Print out edwQaWigSpot as a line in a tab-separated file. */
+
+#define edwQaWigSpotCommaOut(el,f) edwQaWigSpotOutput(el,f,',',',');
+/* Print out edwQaWigSpot as a comma separated list including final comma. */
+
+#define EDWQADNASESINGLESTATS5M_NUM_COLS 18
+
+extern char *edwQaDnaseSingleStats5mCommaSepFieldNames;
+
+struct edwQaDnaseSingleStats5m
+/* Statistics calculated based on a 5M sample of DNAse aligned reads from a bam file. */
+    {
+    struct edwQaDnaseSingleStats5m *next;  /* Next in singly linked list. */
+    unsigned id;	/* Id of this row in table. */
+    unsigned fileId;	/* Id of bam file this is calculated from */
+    unsigned sampleReads;	/* Number of mapped reads  */
+    double spotRatio;	/* Ratio of signal in spots to total signal,  between 0 and 1 */
+    double enrichment;	/* Enrichment in spots compared to genome overall */
+    long long basesInGenome;	/* Number of bases in genome */
+    long long basesInSpots;	/* Number of bases in spots */
+    double sumSignal;	/* Total signal */
+    double spotSumSignal;	/* Total signal in spots */
+    char *estFragLength;	/* Up to three comma separated strand cross-correlation peaks */
+    char *corrEstFragLen;	/* Up to three cross strand correlations at the given peaks */
+    int phantomPeak;	/* Read length/phantom peak strand shift */
+    double corrPhantomPeak;	/* Correlation value at phantom peak */
+    int argMinCorr;	/* strand shift at which cross-correlation is lowest */
+    double minCorr;	/* minimum value of cross-correlation */
+    double nsc;	/* Normalized strand cross-correlation coefficient (NSC) = corrEstFragLen/minCorr */
+    double rsc;	/* Relative strand cross-correlation coefficient (RSC) */
+    int rscQualityTag;	/* based on thresholded RSC (codes: -2:veryLow,-1:Low,0:Medium,1:High,2:veryHigh) */
+    };
+
+void edwQaDnaseSingleStats5mStaticLoad(char **row, struct edwQaDnaseSingleStats5m *ret);
+/* Load a row from edwQaDnaseSingleStats5m table into ret.  The contents of ret will
+ * be replaced at the next call to this function. */
+
+struct edwQaDnaseSingleStats5m *edwQaDnaseSingleStats5mLoadByQuery(struct sqlConnection *conn, char *query);
+/* Load all edwQaDnaseSingleStats5m from table that satisfy the query given.  
+ * Where query is of the form 'select * from example where something=something'
+ * or 'select example.* from example, anotherTable where example.something = 
+ * anotherTable.something'.
+ * Dispose of this with edwQaDnaseSingleStats5mFreeList(). */
+
+void edwQaDnaseSingleStats5mSaveToDb(struct sqlConnection *conn, struct edwQaDnaseSingleStats5m *el, char *tableName, int updateSize);
+/* Save edwQaDnaseSingleStats5m as a row to the table specified by tableName. 
+ * As blob fields may be arbitrary size updateSize specifies the approx size
+ * of a string that would contain the entire query. Arrays of native types are
+ * converted to comma separated strings and loaded as such, User defined types are
+ * inserted as NULL. This function automatically escapes quoted strings for mysql. */
+
+struct edwQaDnaseSingleStats5m *edwQaDnaseSingleStats5mLoad(char **row);
+/* Load a edwQaDnaseSingleStats5m from row fetched with select * from edwQaDnaseSingleStats5m
+ * from database.  Dispose of this with edwQaDnaseSingleStats5mFree(). */
+
+struct edwQaDnaseSingleStats5m *edwQaDnaseSingleStats5mLoadAll(char *fileName);
+/* Load all edwQaDnaseSingleStats5m from whitespace-separated file.
+ * Dispose of this with edwQaDnaseSingleStats5mFreeList(). */
+
+struct edwQaDnaseSingleStats5m *edwQaDnaseSingleStats5mLoadAllByChar(char *fileName, char chopper);
+/* Load all edwQaDnaseSingleStats5m from chopper separated file.
+ * Dispose of this with edwQaDnaseSingleStats5mFreeList(). */
+
+#define edwQaDnaseSingleStats5mLoadAllByTab(a) edwQaDnaseSingleStats5mLoadAllByChar(a, '\t');
+/* Load all edwQaDnaseSingleStats5m from tab separated file.
+ * Dispose of this with edwQaDnaseSingleStats5mFreeList(). */
+
+struct edwQaDnaseSingleStats5m *edwQaDnaseSingleStats5mCommaIn(char **pS, struct edwQaDnaseSingleStats5m *ret);
+/* Create a edwQaDnaseSingleStats5m out of a comma separated string. 
+ * This will fill in ret if non-null, otherwise will
+ * return a new edwQaDnaseSingleStats5m */
+
+void edwQaDnaseSingleStats5mFree(struct edwQaDnaseSingleStats5m **pEl);
+/* Free a single dynamically allocated edwQaDnaseSingleStats5m such as created
+ * with edwQaDnaseSingleStats5mLoad(). */
+
+void edwQaDnaseSingleStats5mFreeList(struct edwQaDnaseSingleStats5m **pList);
+/* Free a list of dynamically allocated edwQaDnaseSingleStats5m's */
+
+void edwQaDnaseSingleStats5mOutput(struct edwQaDnaseSingleStats5m *el, FILE *f, char sep, char lastSep);
+/* Print out edwQaDnaseSingleStats5m.  Separate fields with sep. Follow last field with lastSep. */
+
+#define edwQaDnaseSingleStats5mTabOut(el,f) edwQaDnaseSingleStats5mOutput(el,f,'\t','\n');
+/* Print out edwQaDnaseSingleStats5m as a line in a tab-separated file. */
+
+#define edwQaDnaseSingleStats5mCommaOut(el,f) edwQaDnaseSingleStats5mOutput(el,f,',',',');
+/* Print out edwQaDnaseSingleStats5m as a comma separated list including final comma. */
+
+#define EDWJOB_NUM_COLS 7
 
 extern char *edwJobCommaSepFieldNames;
 
@@ -1352,8 +1878,9 @@ struct edwJob
     char *commandLine;	/* Command line of job */
     long long startTime;	/* Start time in seconds since 1970 */
     long long endTime;	/* End time in seconds since 1970 */
-    char *stderr;	/* The output to stderr of the run - may be nonembty even with success */
+    char *stderr;	/* The output to stderr of the run - may be nonempty even with success */
     int returnCode;	/* The return code from system command - 0 for success */
+    int pid;	/* Process ID for running processes */
     };
 
 void edwJobStaticLoad(char **row, struct edwJob *ret);
@@ -1411,7 +1938,7 @@ void edwJobOutput(struct edwJob *el, FILE *f, char sep, char lastSep);
 #define edwJobCommaOut(el,f) edwJobOutput(el,f,',',',');
 /* Print out edwJob as a comma separated list including final comma. */
 
-#define EDWSUBMITJOB_NUM_COLS 6
+#define EDWSUBMITJOB_NUM_COLS 7
 
 extern char *edwSubmitJobCommaSepFieldNames;
 
@@ -1423,8 +1950,9 @@ struct edwSubmitJob
     char *commandLine;	/* Command line of job */
     long long startTime;	/* Start time in seconds since 1970 */
     long long endTime;	/* End time in seconds since 1970 */
-    char *stderr;	/* The output to stderr of the run - may be nonembty even with success */
+    char *stderr;	/* The output to stderr of the run - may be nonempty even with success */
     int returnCode;	/* The return code from system command - 0 for success */
+    int pid;	/* Process ID for running processes */
     };
 
 void edwSubmitJobStaticLoad(char **row, struct edwSubmitJob *ret);

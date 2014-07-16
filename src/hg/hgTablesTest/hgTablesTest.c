@@ -1,4 +1,7 @@
 /* hgTablesTest - Test hgTables web page. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "memalloc.h"
 #include "linefile.h"
@@ -129,9 +132,7 @@ struct htmlPage *quickSubmit(struct htmlPage *basePage,
 	char *testName, char *button, char *buttonVal)
 /* Submit page and record info.  Return NULL if a problem. */
 {
-struct tablesTest *test;
-struct qaStatus *qs;
-struct htmlPage *page;
+struct htmlPage *page = NULL;
 
 // don't get ahead of the botDelay
 sleep1000(5000);
@@ -142,6 +143,8 @@ verbose(2, "quickSubmit(%p, %s, %s, %s, %s, %s, %s, %s, %s)\n",
 	naForNull(button), naForNull(buttonVal));
 if (basePage != NULL)
     {
+    struct qaStatus *qs;
+    struct tablesTest *test;
     if (db != NULL)
 	htmlPageSetVar(basePage, NULL, "db", db);
     if (org != NULL)

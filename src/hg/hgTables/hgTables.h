@@ -1,5 +1,8 @@
 /* hgTables - shared data between hgTables modules. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #ifndef HGTABLES_H
 #define HGTABLES_H
 
@@ -325,6 +328,9 @@ char *filterFieldVarName(char *db, char *table, char *field, char *type);
 #define filterMaxOutputVar "maxOutput"
 
 /* --------- Functions related to intersecting. --------------- */
+
+boolean canIntersect(char *db, char *table);
+/* Return true if table supports intersection, i.e. it exists and is positional. */
 
 boolean anyIntersection();
 /* Return TRUE if there's an intersection to do. */
@@ -808,7 +814,7 @@ void halTabOut(char *db, char *table, struct sqlConnection *conn, char *fields, 
 boolean isBamTable(char *table);
 /* Return TRUE if table corresponds to a BAM file. */
 
-struct slName *bamGetFields(char *table);
+struct slName *bamGetFields();
 /* Get fields of bam as simple name list. */
 
 struct sqlFieldType *bamListFieldsAndTypes();
@@ -835,30 +841,32 @@ struct slName *randomBamIds(char *table, struct sqlConnection *conn, int count);
 
 extern char *vcfDataLineAutoSqlString;
 
-boolean isVcfTable(char *table);
-/* Return TRUE if table corresponds to a VCF file. */
+boolean isVcfTable(char *table, boolean *retIsTabix);
+/* Return TRUE if table corresponds to a VCF file. 
+ * If retIsTabix is non-NULL, set *retIsTabix to TRUE if this is vcfTabix (not just vcf). */
 
-struct slName *vcfGetFields(char *table);
+struct slName *vcfGetFields();
 /* Get fields of VCF as simple name list. */
 
 struct sqlFieldType *vcfListFieldsAndTypes();
 /* Get fields of VCF as list of sqlFieldType. */
 
-struct hTableInfo *vcfToHti(char *table);
+struct hTableInfo *vcfToHti(char *table, boolean isTabix);
 /* Get standard fields of VCF into hti structure. */
 
-void showSchemaVcf(char *table, struct trackDb *tdb);
+void showSchemaVcf(char *table, struct trackDb *tdb, boolean isTabix);
 /* Show schema on VCF. */
 
-void vcfTabOut(char *db, char *table, struct sqlConnection *conn, char *fields, FILE *f);
+void vcfTabOut(char *db, char *table, struct sqlConnection *conn, char *fields, FILE *f,
+	       boolean isTabix);
 /* Print out selected fields from VCF.  If fields is NULL, then print out all fields. */
 
 struct bed *vcfGetFilteredBedsOnRegions(struct sqlConnection *conn,
-					char *db, char *table, struct region *regionList,
-					struct lm *lm, int *retFieldCount);
+	char *db, char *table, struct region *regionList, struct lm *lm,
+	int *retFieldCount, boolean isTabix);
 /* Get list of beds from VCF, in all regions, that pass filtering. */
 
-struct slName *randomVcfIds(char *table, struct sqlConnection *conn, int count);
+struct slName *randomVcfIds(char *table, struct sqlConnection *conn, int count, boolean isTabix);
 /* Return some semi-random IDs from a VCF file. */
 
 /* ----------- Custom track stuff. -------------- */

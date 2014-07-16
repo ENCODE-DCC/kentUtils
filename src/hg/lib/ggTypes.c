@@ -1,5 +1,8 @@
 /* ggTypes - Type enumerations used by geneGraph and other modules. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "ggTypes.h"
 
@@ -61,12 +64,13 @@ enum ggVertexType ggEdgeTypeFromString(char *s)
 /* Return string corresponding to edge type. */
 {
 if (sameString(s, "exon"))
-    return ggExon;
+    return (enum ggVertexType)ggExon;
 else if (sameString(s, "intron"))
-    return ggIntron;
+    return (enum ggVertexType)ggIntron;
 else
     {
     errAbort("Unknown type %s", s);
-    return ggIntron;	/* Because compiler wants us to return something. */
     }
+/* NOTREACHED */
+return (enum ggVertexType)ggIntron;	/* compiler expecting a return */
 }

@@ -5,7 +5,7 @@
  * granted for all use - public, private or commercial. */
 
 #include "common.h"
-#include "errabort.h"
+#include "errAbort.h"
 #include "portable.h"
 #include "linefile.h"
 #include "hash.h"
@@ -382,7 +382,7 @@ slUniqify(pList,compare,free);
 }
 
 boolean slRemoveEl(void *vpList, void *vToRemove)
-/* Remove element from doubly linked list.  Usage:
+/* Remove element from singly linked list.  Usage:
  *    slRemove(&list, el);
  * Returns TRUE if element in list.  */
 {
@@ -441,6 +441,15 @@ for (i=list;i;i=i->next)
 return NULL;
 }
 
+struct slUnsigned *slUnsignedNew(unsigned x)
+/* Return a new int. */
+{
+struct slUnsigned *a;
+AllocVar(a);
+a->val = x;
+return a;
+}
+
 static int doubleCmp(const void *va, const void *vb)
 /* Compare function to sort array of doubles. */
 {
@@ -482,18 +491,43 @@ void doubleBoxWhiskerCalc(int count, double *array, double *retMin,
                           double *retQ1, double *retMedian, double *retQ3, double *retMax)
 /* Calculate what you need to draw a box and whiskers plot from an array of doubles. */
 {
+if (count <= 0)
+    errAbort("doubleBoxWhiskerCalc needs a positive number, not %d for count", count);
+if (count == 1)
+    {
+    *retMin = *retQ1 = *retMedian = *retQ3 = *retMax = array[0];
+    return;
+    }
 doubleSort(count, array);
-*retMin = array[0];
-*retQ1 = array[(count+2)/4];
+double min = array[0];
+double max = array[count-1];
+double median;
 int halfCount = count>>1;
 if ((count&1) == 1)
-    *retMedian = array[halfCount];
+    median = array[halfCount];
 else
     {
-    *retMedian = (array[halfCount] + array[halfCount-1]) * 0.5;
+    median = (array[halfCount] + array[halfCount-1]) * 0.5;
     }
-*retQ3 = array[(3*count+2)/4];
-*retMax = array[count-1];
+double q1, q3;
+if (count <= 3)
+    {
+    q1 = 0.5 * (median + min);
+    q3 = 0.5 * (median + max);
+    }
+else
+    {
+    int q1Ix = count/4;
+    int q3Ix = count - 1 - q1Ix;
+    uglyf("count %d, q1Ix %d, q3Ix %d\n", count, q1Ix, q3Ix);
+    q1 = array[q1Ix];
+    q3 = array[q3Ix];
+    }
+*retMin = min;
+*retQ1 = q1;
+*retMedian = median;
+*retQ3 = q3;
+*retMax = max;
 }
 
 struct slDouble *slDoubleNew(double x)
@@ -2429,7 +2463,7 @@ if ((f = fopen(fileName, mode)) == NULL)
         else if (mode[0] == 'a')
             modeName = " to append";
         }
-    errAbort("Can't open %s%s: %s", fileName, modeName, strerror(errno));
+    errAbort("mustOpen: Can't open %s%s: %s", fileName, modeName, strerror(errno));
     }
 return f;
 }
@@ -2578,7 +2612,7 @@ if (fd < 0)
 	modeName = " to append";
     else
 	modeName = " to read";
-    errnoAbort("Can't open %s%s", fileName, modeName);
+    errnoAbort("mustOpenFd: Can't open %s%s", fileName, modeName);
     }
 return fd;
 }
@@ -3491,4 +3525,13 @@ if (strptime(date,format, &tp))
     strftime(newDate,12,format,&tp);
     }
 return cloneString(newDate);  // newDate is never freed!
+}
+
+boolean haplotype(const char *name)
+/* Is this name a haplotype name ?  _hap or _alt in the name */
+{
+if (stringIn("_hap", name) || stringIn("_alt", name))
+   return TRUE;
+else
+   return FALSE;
 }

@@ -1,4 +1,7 @@
 /* hubPublicCheck - checks that the labels in hubPublic match what is in the hub labels. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -36,21 +39,27 @@ int hubPublicCheck(char *table)
 {
 struct sqlConnection *conn = hConnectCentral();
 char query[512];
-sqlSafef(query, sizeof(query), "select hubUrl, shortLabel,longLabel from %s", 
+bool hasDescriptionUrl = sqlColumnExists(conn, table, "descriptionUrl");
+if (hasDescriptionUrl)
+    sqlSafef(query, sizeof(query), "select hubUrl, shortLabel,longLabel,dbList,descriptionUrl from %s", 
 	table); 
+else
+    sqlSafef(query, sizeof(query), "select hubUrl, shortLabel,longLabel,dbList from %s", 
+	table); 
+
 struct sqlResult *sr = sqlGetResult(conn, query);
 char **row;
 int differences = 0;
 
 while ((row = sqlNextRow(sr)) != NULL)
     {
-    char *url = row[0], *shortLabel = row[1], *longLabel = row[2]; 
+    char *url = row[0], *shortLabel = row[1], *longLabel = row[2], *dbList = row[3], *descriptionUrl = row[4];
     struct errCatch *errCatch = errCatchNew();
     boolean gotWarning = FALSE;
     struct trackHub *tHub = NULL;
     
     if (errCatchStart(errCatch))
-	tHub = trackHubOpen(url, "1"); 
+	tHub = trackHubOpen(url, "hub_1"); 
     errCatchEnd(errCatch);
     if (errCatch->gotError)
 	{
@@ -76,6 +85,28 @@ while ((row = sqlNextRow(sr)) != NULL)
 
 	printf("update %s set longLabel=\"%s\" where hubUrl=\"%s\";\n",table, tHub->longLabel, url);
 	}
+
+    struct dyString *dy = newDyString(1024);
+    struct trackHubGenome *genome = tHub->genomeList;
+
+    for(; genome; genome = genome->next)
+	dyStringPrintf(dy, "%s,", trackHubSkipHubName(genome->name));
+
+    if (!sameString(dy->string, dbList))
+	{
+	differences++;
+
+	printf("update %s set dbList=\"%s\" where hubUrl=\"%s\";\n",table, dy->string, url);
+	}
+
+    if (hasDescriptionUrl && !isEmpty(tHub->descriptionUrl) && ((descriptionUrl == NULL) || !sameString(descriptionUrl, tHub->descriptionUrl)))
+	{
+	differences++;
+
+	printf("update %s set descriptionUrl=\"%s\" where hubUrl=\"%s\";\n",table, tHub->descriptionUrl, url);
+	}
+
+    trackHubClose(&tHub);
     }
 return differences;
 }
@@ -89,7 +120,7 @@ struct trackHub *tHub = NULL;
 int dbCount = 0;
 
 if (errCatchStart(errCatch))
-    tHub = trackHubOpen(url, "1"); 
+    tHub = trackHubOpen(url, "hub_1"); 
 errCatchEnd(errCatch);
 if (errCatch->gotError)
     {
@@ -108,11 +139,11 @@ struct dyString *dy = newDyString(1024);
 while ((hel = hashNext(&cookie)) != NULL)
     {
     dbCount++;
-    dyStringPrintf(dy, "%s,", hel->name);
+    dyStringPrintf(dy, "%s,", trackHubSkipHubName(hel->name));
     }
 
-printf("insert into %s (hubUrl,shortLabel,longLabel,registrationTime,dbCount,dbList) values (\"%s\",\"%s\", \"%s\",now(),%d, \"%s\");\n",
-    table, url, tHub->shortLabel, tHub->longLabel, dbCount, dy->string); 
+printf("insert into %s (hubUrl,descriptionUrl,shortLabel,longLabel,registrationTime,dbCount,dbList) values (\"%s\",\"%s\", \"%s\", \"%s\", now(),%d, \"%s\");\n",
+    table, url, tHub->descriptionUrl, tHub->shortLabel, tHub->longLabel, dbCount, dy->string); 
 
 return 0;
 }

@@ -132,6 +132,17 @@ if ( $status ) then
     wait
     exit 1
 endif
+
+## copy binaries to beta machine:
+rsync -a -P --exclude=hg.conf --exclude=hg.conf.private \
+  /usr/local/apache/cgi-bin-beta/ qateam@hgwbeta:/data/apache/cgi-bin/
+rsync -a -P --exclude=hg.conf --exclude=hg.conf.private \
+  /usr/local/apache/htdocs-beta/ qateam@hgwbeta:/data/apache/htdocs/
+rsync -a -P --exclude=hg.conf --exclude=hg.conf.private --delete \
+  /usr/local/apache/htdocs-beta/js/ qateam@hgwbeta:/data/apache/htdocs/js/
+rsync -a -P --exclude=hg.conf --exclude=hg.conf.private --delete \
+  /usr/local/apache/htdocs-beta/style/ qateam@hgwbeta:/data/apache/htdocs/style/
+
 echo "build on beta done for v$BRANCHNN [${0}: `date`]"
 echo "v$BRANCHNN built successfully on beta (day 16)." | mail -s "v$BRANCHNN Build complete on beta (day 16)." $USER ${BUILDMEISTER} galt kent browser-qa
 
@@ -142,13 +153,13 @@ echo "Wait complete, checking results. [${0}: `date`]"
 if ( -e GitReports.ok ) then
     echo "Git Reports finished ok. [${0}: `date`]"
     echo "buildGitReports.csh done on hgwdev, sending email... [${0}: `date`]"
-    echo "Ready for pairings, day 16, Git reports completed for v${BRANCHNN} branch http://genecats.cse.ucsc.edu/git-reports/ (history at http://genecats.cse.ucsc.edu/git-reports-history/)." | mail -s "Ready for pairings (day 16, v${BRANCHNN} review)." $USER ${BUILDMEISTER} donnak kuhn ann pauline kate luvina
+    echo "Ready for pairings, day 16, Git reports completed for v${BRANCHNN} branch http://genecats.cse.ucsc.edu/git-reports/ (history at http://genecats.cse.ucsc.edu/git-reports-history/)." | mail -s "Ready for pairings (day 16, v${BRANCHNN} review)." $USER ${BUILDMEISTER} donnak kuhn ann kate luvina steve
 
 	# email all who have checked in that code summaries are due
     @ LASTNN=$BRANCHNN - 1
     #foreach victim (braney larrym angie hiram tdreszer kate chinhli)
     set victims=( `git log v${LASTNN}_base..v${BRANCHNN}_base --name-status | grep Author | sort | uniq | awk '{ end=index($0,"@"); beg=index($0,"<"); addr=substr( $0,beg+1,end-beg-1); print addr; }'` )
-    echo "Expected victims:\n${victims}" | mail -s "Code summaries for v$BRANCHNN are expected from...." $USER ${BUILDMEISTER} ann
+    echo "Expected victims:\n${victims}" | mail -s "Code summaries for v$BRANCHNN are expected from...." $USER ${BUILDMEISTER} ann@soe.ucsc.edu
     foreach victim ( $victims )
 		git log --author=${victim} v${LASTNN}_base..v${BRANCHNN}_base --pretty=oneline > /dev/null
 		if ($? == 0) then
@@ -156,6 +167,7 @@ if ( -e GitReports.ok ) then
                        echo "To: ${victim}" > /dev/shm/build.email.${victim}.txt
                        echo "From: ann@soe.ucsc.edu" >> /dev/shm/build.email.${victim}.txt
                        echo "Subject: Code summaries are due for ${victim}" >> /dev/shm/build.email.${victim}.txt
+                       echo "Cc: ann@soe.ucsc.edu" >> /dev/shm/build.email.${victim}.txt
                        echo "" >> /dev/shm/build.email.${victim}.txt
 		       ./summaryEmail.sh ${victim} >> /dev/shm/build.email.${victim}.txt
 		       cat /dev/shm/build.email.${victim}.txt | /usr/sbin/sendmail -t -oi

@@ -1,4 +1,7 @@
 /* genePredCheck - validate genePred files or tables. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "options.h"
 #include "verbose.h"
@@ -71,7 +74,7 @@ static void checkGenePred(char *fileTbl)
 /* check a genePred file or table */
 {
 struct sqlConnection *conn = NULL;
-struct genePredReader *gpr;
+struct genePredReader *gpr = NULL;
 struct genePred *gp;
 int iRec = 0;
 

@@ -1,4 +1,7 @@
 /* chainPreNet - Remove chains that don't have a chance of being netted. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -30,8 +33,8 @@ errAbort(
   "   -dots=N - output a dot every so often\n"
   "   -pad=N - extra to pad around blocks to decrease trash\n"
   "            (default %d)\n"
-  "   -inclHap - include query sequences name in the form *_hap*. Normally\n"
-  "              these are excluded from nets as being haplotype\n"
+  "   -inclHap - include query sequences name in the form *_hap*|*_alt*.\n"
+  "              Normally these are excluded from nets as being haplotype\n"
   "              pseudochromosomes\n",
   pad);
 }
@@ -95,7 +98,7 @@ bitSetRange(chrom->bits, s, e-s);
 static boolean inclQuery(struct chain *chain)
 /* should this query be included? */
 {
-return inclHap || (stringIn("_hap", chain->qName) == NULL);
+return inclHap || ! haplotype(chain->qName);
 }
 
 boolean chainUsed(struct chain *chain, 

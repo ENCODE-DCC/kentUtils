@@ -1,5 +1,8 @@
 /* Put up pages for selecting and filtering on fields. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "hash.h"
 #include "linefile.h"
@@ -333,9 +336,9 @@ struct slName *fieldList;
 if (isBigBed(database, table, curTrack, ctLookupName))
     fieldList = bigBedGetFields(table, conn);
 else if (isBamTable(table))
-    fieldList = bamGetFields(table);
-else if (isVcfTable(table))
-    fieldList = vcfGetFields(table);
+    fieldList = bamGetFields();
+else if (isVcfTable(table, NULL))
+    fieldList = vcfGetFields();
 else
     fieldList = sqlListFields(conn, table);
 
@@ -379,7 +382,12 @@ if (asObj)
     {
     struct slName *fieldList = NULL;
     if (ct->dbTableName != NULL)
-        fieldList = sqlListFields(conn, ct->dbTableName);
+	{
+	if (isVcfTable(table, NULL))
+	    fieldList = vcfGetFields();
+	else
+	    fieldList = sqlListFields(conn, ct->dbTableName);
+	}
     if (fieldList == NULL)
         fieldList = asColNames(asObj);
     showTableFieldsOnList(db, table, asObj, fieldList, FALSE, withGetButton);
@@ -923,7 +931,7 @@ boolean isSmallWig = isWiggle(db, table);
 boolean isWig = isSmallWig || isBigWigTable(table);
 boolean isBedGr = isBedGraph(rootTable);
 boolean isBam = isBamTable(rootTable);
-boolean isVcf = isVcfTable(rootTable);
+boolean isVcf = isVcfTable(rootTable, NULL);
 int bedGraphColumn = 5;		/*	default score column	*/
 
 if (isBedGr)
@@ -963,7 +971,7 @@ else
         ftList = bigBedListFieldsAndTypes(table, conn);
     else if (isBamTable(table))
 	ftList = bamListFieldsAndTypes();
-    else if (isVcfTable(table))
+    else if (isVcf)
 	ftList = vcfListFieldsAndTypes();
     else
         ftList = sqlListFieldsAndTypes(conn, table);
@@ -1051,7 +1059,7 @@ else if (isBamTable(table))
     struct sqlFieldType *ftList = bamListFieldsAndTypes();
     printSqlFieldListAsControlTable(ftList, db, table, ct->tdb, FALSE);
     }
-else if (isVcfTable(table))
+else if (isVcfTable(table, NULL))
     {
     struct sqlFieldType *ftList = vcfListFieldsAndTypes();
     printSqlFieldListAsControlTable(ftList, db, table, ct->tdb, FALSE);
@@ -1101,7 +1109,7 @@ else
 
 puts("</TABLE>");
 
-if (ct->wiggle || isBigWigTable(table) || isBamTable(table) || isVcfTable(table))
+if (ct->wiggle || isBigWigTable(table) || isBamTable(table) || isVcfTable(table, NULL))
     {
     char *name;
     hPrintf("<TABLE BORDER=0><TR><TD> Limit data output to:&nbsp\n");

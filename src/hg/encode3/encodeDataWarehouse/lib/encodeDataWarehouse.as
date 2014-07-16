@@ -1,9 +1,18 @@
+table edwSettings
+"Settings used to configure warehouse"
+    (
+    uint id primary auto;  "Settings ID"
+    string name unique;	"Settings name, can't be reused"
+    string val index; "Settings value, some undefined but not huge thing"
+    )
 
 table edwUser
 "Someone who submits files to or otherwise interacts with big data warehouse"
     (
     uint id primary auto;      "Autoincremented user ID"
     string email unique;   "Email address - required"
+    char[37] uuid index; "Help to synchronize us with Stanford."
+    byte isAdmin;	"If true the use can modify other people's files too."
     )
 
 table edwScriptRegistry
@@ -53,8 +62,8 @@ table edwFile
     uint id primary auto;                    "Autoincrementing file id"
     uint submitId index;              "Links to id in submit table"
     uint submitDirId index;           "Links to id in submitDir table"
-    lstring submitFileName index[32];     "File name in submit relative to submit dir"
-    lstring edwFileName unique[32];        "File name in big data warehouse relative to edw root dir"
+    lstring submitFileName index[64];     "File name in submit relative to submit dir"
+    lstring edwFileName index[32];        "File name in big data warehouse relative to edw root dir"
     bigInt startUploadTime;     "Time when upload started - 0 if not started"
     bigInt endUploadTime;       "Time when upload finished - 0 if not finished"
     bigInt updateTime;          "Update time (on system it was uploaded from)"
@@ -109,6 +118,29 @@ table edwAssembly
     uint twoBitId;  "File ID of associated twoBit file"
     bigInt baseCount;  "Count of bases including N's"
     bigInt realBaseCount;   "Count of non-N bases in assembly"
+    uint seqCount; "Number of chromosomes or other distinct sequences in assembly"
+    )
+
+table edwBiosample
+"A biosample - not much info here, just enough to drive analysis pipeline"
+    (
+    uint id primary auto;  "Biosample id"
+    string term index;	   "Human readable.  Shared with ENCODE2."
+    uint taxon;	    "NCBI taxon number - 9606 for human."
+    string sex;	"One letter code: M male, F female, B both, U unknown"
+    )
+
+table edwExperiment
+"An experiment - ideally will include a couple of biological replicates. Downloaded from Stanford."
+    (
+    char[16] accession unique; "Something like ENCSR000CFA. ID shared with Stanford."
+    string dataType; "Something liek RNA-seq, DNase-seq, ChIP-seq. Computed at UCSC."
+    string lab; "Lab PI name and institution. Is lab.title at Stanford."
+    string biosample;  "Cell line name, tissue source, etc. Is biosample_term_name at Stanford."
+    string rfa;  "Something like 'ENCODE2' or 'ENCODE3'.  Is award.rfa at Stanford."
+    string assayType; "Similar to dataType. Is assay_term_name at Stanford."
+    string ipTarget; "The target for the immunoprecipitation in ChIP & RIP." 
+    string control; "Primary control for experiment.  Usually another experiment accession."
     )
 
 table edwValidFile
@@ -116,8 +148,8 @@ table edwValidFile
     (
     uint id primary auto;          "ID of validated file"
     char[16] licensePlate index;  "A abc123 looking license-platish thing."
-    uint fileId unique;      "Pointer to file in main file table"
-    string format;    "What format it's in from manifest"
+    uint fileId index;      "Pointer to file in main file table"
+    string format index[12];    "What format it's in from manifest"
     string outputType index[16]; "What output_type it is from manifest"
     string experiment index[16]; "What experiment it's in from manifest"
     string replicate;  "What replicate it is from manifest.  Values 1,2,3... pooled, or ''"
@@ -133,11 +165,12 @@ table edwValidFile
     double mapRatio;    "Proportion of items that map to genome"
     double sampleCoverage; "Proportion of assembly covered by at least one item in sample"
     double depth;   "Estimated genome-equivalents covered by possibly overlapping data"
-    byte singleQaStatus;  "0 for untested, 1 for pass, -1 for fail"
-    byte replicateQaStatus;  "0 for untested, 1 for pass, -1 for fail"
-
+    byte singleQaStatus;  "0 = untested, 1 =  pass, -1 = fail, 2 = forced pass, -2 = forced fail"
+    byte replicateQaStatus;  "0 = untested, 1 = pass, -1 = fail, 2 = forced pass, -2 = forced fail"
     string technicalReplicate; "Manifest's technical_replicate tag. Values 1,2,3... pooled or ''"
     string pairedEnd; "The paired_end tag from the manifest.  Values 1,2 or ''"
+    byte qaVersion; "Version of QA pipeline making status decisions"
+    double uniqueMapRatio; "Fraction of reads that map uniquely to genome for bams and fastqs"
     )
 
 table edwFastqFile
@@ -172,6 +205,37 @@ table edwFastqFile
     double[readSizeMax] gAtPos;   "% of Gs at each pos"
     double[readSizeMax] tAtPos;   "% of Ts at each pos"
     double[readSizeMax] nAtPos;   "% of '.' or 'N' at each pos"
+    )
+
+table edwBamFile
+"Info on what is in a bam file beyond whet's in edwValidFile"
+    (
+    uint id primary auto;	"ID in this table"
+    uint fileId unique; "ID in edwFile table."
+    byte isPaired;	"Set to 1 if paired reads, 0 if single"
+    byte isSortedByTarget; "Set to 1 if sorted by target,pos"
+    bigint readCount; "# of reads in file"
+    bigint readBaseCount; "# of bases in all reads added up"
+    bigint mappedCount; "# of reads that map"
+    bigint uniqueMappedCount; "# of reads that map to a unique position"
+    double readSizeMean; "Average read size"
+    double readSizeStd;  "Standard deviation of read size"
+    int readSizeMin;  "Minimum read size"
+    int readSizeMax; "Maximum read size"
+    int u4mReadCount; "Uniquely-mapped 4 million read actual read # (usually 4M)"
+    int u4mUniquePos;  "Unique positions in target of the 4M reads that map to single pos"
+    double u4mUniqueRatio; "u4mUniqPos/u4mReadCount - measures library diversity"
+    bigInt targetBaseCount;  "Count of bases in mapping target"
+    uint targetSeqCount; "Number of chromosomes or other distinct sequences in mapping target"
+    )
+
+table edwQaFail
+"Record of a QA failure."
+    (
+    uint id primary auto;   "ID of failure"
+    uint fileId index;	"File that failed"
+    uint qaVersion; "QA pipeline version"
+    lstring reason; "reason for failure"
     )
 
 table edwQaEnrichTarget
@@ -249,14 +313,51 @@ table edwQaPairedEndFastq
 "Information about two paired-end fastqs"
     (
     uint id primary auto; "Id of this set of paired end files"
-    uint fileId1 unique; "Id of first in pair"
-    uint fileId2 unique; "Id of second in pair"
+    uint fileId1 index; "Id of first in pair"
+    uint fileId2 index; "Id of second in pair"
     double concordance;  "% of uniquely aligning reads where pairs nearby and point right way"
     double distanceMean; "Average distance between reads"
     double distanceStd;  "Standard deviation of distance"
     double distanceMin;	 "Minimum distance"
     double distanceMax;  "Maximum distatnce"
     byte recordComplete; "Flag to avoid a race condition. Ignore record if this is 0"
+    )
+
+table edwQaWigSpot
+"Information about proportion of signal in a wig that lands under spots in a peak or bed file"
+    (
+    uint id primary auto; "Id of this wig/spot intersection"
+    uint wigId index;	"Id of bigWig file"
+    uint spotId index;  "Id of a bigBed file probably broadPeak or narrowPeak"
+    double spotRatio; "Ratio of signal in spots to total signal,  between 0 and 1"
+    double enrichment;	"Enrichment in spots compared to genome overall"
+    bigInt basesInGenome; "Number of bases in genome"
+    bigInt basesInSpots; "Number of bases in spots"
+    double sumSignal; "Total signal"
+    double spotSumSignal; "Total signal in spots"
+    )
+
+table edwQaDnaseSingleStats5m
+"Statistics calculated based on a 5M sample of DNAse aligned reads from a bam file."
+    (
+    uint id primary auto;  "Id of this row in table."
+    uint fileId index;	"Id of bam file this is calculated from"
+    uint sampleReads;  "Number of mapped reads "
+    double spotRatio; "Ratio of signal in spots to total signal,  between 0 and 1"
+    double enrichment;	"Enrichment in spots compared to genome overall"
+    bigInt basesInGenome; "Number of bases in genome"
+    bigInt basesInSpots; "Number of bases in spots"
+    double sumSignal; "Total signal"
+    double spotSumSignal; "Total signal in spots"
+    string estFragLength; "Up to three comma separated strand cross-correlation peaks"
+    string corrEstFragLen; "Up to three cross strand correlations at the given peaks"
+    int phantomPeak;  "Read length/phantom peak strand shift"
+    double corrPhantomPeak; "Correlation value at phantom peak"
+    int argMinCorr; "strand shift at which cross-correlation is lowest"
+    double minCorr; "minimum value of cross-correlation"
+    double nsc; "Normalized strand cross-correlation coefficient (NSC) = corrEstFragLen/minCorr"
+    double rsc; "Relative strand cross-correlation coefficient (RSC)"
+    int rscQualityTag; "based on thresholded RSC (codes: -2:veryLow,-1:Low,0:Medium,1:High,2:veryHigh)"
     )
 
 
@@ -267,8 +368,9 @@ table edwJob
     lstring commandLine; "Command line of job"
     bigInt startTime; "Start time in seconds since 1970"
     bigInt endTime; "End time in seconds since 1970"
-    lstring stderr; "The output to stderr of the run - may be nonembty even with success"
+    lstring stderr; "The output to stderr of the run - may be nonempty even with success"
     int returnCode; "The return code from system command - 0 for success"
+    int pid;	"Process ID for running processes"
     )
 
 table edwSubmitJob
@@ -278,6 +380,8 @@ table edwSubmitJob
     lstring commandLine; "Command line of job"
     bigInt startTime; "Start time in seconds since 1970"
     bigInt endTime; "End time in seconds since 1970"
-    lstring stderr; "The output to stderr of the run - may be nonembty even with success"
+    lstring stderr; "The output to stderr of the run - may be nonempty even with success"
     int returnCode; "The return code from system command - 0 for success"
+    int pid;	"Process ID for running processes"
     )
+

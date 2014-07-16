@@ -1,4 +1,7 @@
 /* allenCollectSeq - Collect probe sequences for Allen Brain Atlas from a variety of sources. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -17,7 +20,7 @@ errAbort(
   "usage:\n"
   "  allenCollectSeq tabFile probeFile nmFile xmFile tcFile extraFile outFile.fa refToRp.tab missing.tab rpToUrl.tab\n"
   "Where tabFile is a tab-separated file with the following fields\n"
-  "\tâ#geneSymbol     geneName        entrezGeneId    refSeqAccessionNumber   urlToAtlas\n"
+  "\t#geneSymbol     geneName        entrezGeneId    refSeqAccessionNumber   urlToAtlas\n"
   "and probeFile is a fasta file containing header lines of the format\n"
   "\t>aibs|14182|sym|Gabrg2|entrez|14406|refseq|NM_008073|probe|RP_040227_01_01\n"
   "and nmFile is a simple fasta file of NCBI refSeqsequences (NM_ sequences)\n"
@@ -108,7 +111,7 @@ for (seq = seqList; seq != NULL; seq = seq->next)
     }
 }
 
-void allenCollectSeq(char *tabFile, char *probeFile, char *nmFile, 
+void allenCollectSeq(char *tabFile, char *probeFile, char *nmFile,
 	char *xmFile, char *tcFile, char *extraFile,
 	char *outFa, char *outRefToRp, char *outMiss, char *outRpToUrl)
 /* allenCollectSeq - Collect probe sequences for Allen Brain Atlas from a variety of sources. */
@@ -188,7 +191,7 @@ while (lineFileRowTab(lf, row))
 	fprintf(fRpToUrl, "%s\t%s\n", seqName, row[4]);
 	if (row[4][0] == 0)
 	    warn("Missing url line %d of %s\n", lf->lineIx, lf->fileName);
-	    
+
 	faWriteNext(fFa, seqName, seq->dna, seq->size);
 	}
     ++hitTotal;
@@ -217,7 +220,7 @@ int main(int argc, char *argv[])
 optionInit(&argc, argv, options);
 if (argc != 11)
     usage();
-allenCollectSeq(argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], 
+allenCollectSeq(argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7],
 	argv[8], argv[9], argv[10]);
 return 0;
 }

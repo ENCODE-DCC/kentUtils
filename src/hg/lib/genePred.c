@@ -2,6 +2,9 @@
  * generated genePred.h and genePred.sql.  This module links the database and the RAM 
  * representation of objects. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "gff.h"
 #include "jksql.h"
@@ -338,6 +341,8 @@ if (iCol < numCols)
     }
 if (iCol < numCols)
     {
+    if (isEmpty(row[iCol])) // if the cdsStartStat field is empty
+	return ret;         // ignore the rest of the fields
     ret->cdsStartStat = parseCdsStat(row[iCol++]);
     ret->optFields |= genePredCdsStatFld;
     }
@@ -545,7 +550,8 @@ int iExon = findLastFramedExon(gp);
 int frame = incrFrame(gp->exonFrames[iExon], (gp->exonEnds[iExon]-gp->exonStarts[iExon]));
 for (iExon++; (iExon < gp->exonCount) && (gp->exonStarts[iExon] < gp->cdsEnd); iExon++)
     {
-    assert(gp->exonFrames[iExon] < 0);
+    if (!((gp->exonFrames[iExon] < 0) || (gp->exonFrames[iExon] == frame)))
+        errAbort("conflicting frame for %s exon index %d, was %d, trying to assign %d", gp->name, iExon, gp->exonFrames[iExon], frame);
     gp->exonFrames[iExon] = frame;
     frame = incrFrame(gp->exonFrames[iExon], (gp->exonEnds[iExon]-gp->exonStarts[iExon]));
     }
@@ -559,7 +565,8 @@ int iExon = findLastFramedExon(gp);
 int frame = incrFrame(gp->exonFrames[iExon], (gp->exonEnds[iExon]-gp->exonStarts[iExon]));
 for (iExon--; (iExon >= 0) && (gp->exonEnds[iExon] > gp->cdsStart); iExon--)
     {
-    assert(gp->exonFrames[iExon] < 0);
+    if (!((gp->exonFrames[iExon] < 0) || (gp->exonFrames[iExon] == frame)))
+        errAbort("conflicting frame for %s exon index %d, was %d, trying to assign %d", gp->name, iExon, gp->exonFrames[iExon], frame);
     gp->exonFrames[iExon] = frame;
     frame = incrFrame(gp->exonFrames[iExon], (gp->exonEnds[iExon]-gp->exonStarts[iExon]));
     }

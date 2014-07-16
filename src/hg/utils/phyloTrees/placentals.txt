@@ -10,6 +10,9 @@ tupBel	Eutheria; Euarchontoglires; Scandentia; Tupaiidae; Tupaia
 # Chinese tree shrew - Tupaia chinensis
 tupChi	Eutheria; Euarchontoglires; Scandentia; Tupaiidae; Tupaia
 
+# galVar1	Malayan flying lemur	Galeopterus variegatus
+galVar	Eutheria; Euarchontoglires; Dermoptera; Cynocephalidae; Galeopterus
+
 # Rabbit Oryctolagus cuniculus
 oryCun	Eutheria; Euarchontoglires; Glires; Lagomorpha; Leporidae; Oryctolagus
 
@@ -37,6 +40,10 @@ speTri	Eutheria; Euarchontoglires; Glires; Rodentia; Sciurognathi; Sciuridae; Xe
 # Kangaroo rat Dipodomys ordii
 dipOrd	Eutheria; Euarchontoglires; Glires; Rodentia; Sciurognathi; Heteromyidae; Dipodomyinae; Dipodomys
 
+# Taxonomy ID: 230844
+# Prairie (North American) deer mouse - Peromyscus maniculatus bairdii
+perManBai	Eutheria; Euarchontoglires; Glires; Rodentia; Sciurognathi; Muroidea; Cricetidae; Neotominae; Peromyscus; Peromyscus maniculatus
+
 # Prairie Vole - Microtus ochrogaster
 micOch1 Eutheria; Euarchontoglires; Glires; Rodentia; Sciurognathi; Muroidea; Cricetidae; Arvicolinae; Microtus
 
@@ -52,12 +59,14 @@ mm	Eutheria; Euarchontoglires; Glires; Rodentia; Sciurognathi; Muroidea; Muridae
 # Rat Rattus norvegicus
 rn	Eutheria; Euarchontoglires; Glires; Rodentia; Sciurognathi; Muroidea; Muridae; Murinae; Rattus
 
-
 # Horse Equus caballus
 equCab	Eutheria; Laurasiatheria; Perissodactyla; Equidae; Equus
 
 # White rhino Ceratotherium simum simum
 cerSim	Eutheria; Laurasiatheria; Perissodactyla; Rhinocerotidae; Ceratotherium
+
+# minke whale - Balaenoptera acutorostrata scammoni
+balAcu	Eutheria; Boreoeutheria; Laurasiatheria; Cetartiodactyla; Cetacea; Mysticeti; Balaenopteridae; Balaenoptera; Balaenoptera acutorostrata
 
 # Yangtze River Dolphin Lipotes vexillifer
 lipVex	Eutheria; Laurasiatheria; Cetartiodactyla; Cetacea; Odontoceti; Lipotidae; Lipotes
@@ -67,6 +76,9 @@ turTru	Eutheria; Laurasiatheria; Cetartiodactyla; Cetacea; Odontoceti; Delphinid
 
 # Killer Whale - Orcinus orca
 orcOrc	Eutheria; Laurasiatheria; Cetartiodactyla; Cetacea; Odontoceti; Delphinidae; Orcinus
+
+# sperm whale - Physeter catodon
+phyCat	Eutheria; Boreoeutheria; Laurasiatheria; Cetartiodactyla; Cetacea; Odontoceti; Physeteridae; Physeter
 
 # Alpaca - Vicugna pacos
 vicPac	Eutheria; Laurasiatheria; Cetartiodactyla; Tylopoda; Camelidae; Vicugna
@@ -79,6 +91,9 @@ panHod	Eutheria; Laurasiatheria; Cetartiodactyla; Ruminantia; Pecora; Bovidae; A
 
 # Cow - Bos taurus
 bosTau	Eutheria; Laurasiatheria; Cetartiodactyla; Ruminantia; Pecora; Bovidae; Bovinae; Bos
+
+# Water buffalo - Bubalus bubalis
+bubBub	Eutheria; Boreoeutheria; Laurasiatheria; Cetartiodactyla; Ruminantia; Pecora; Bovidae; Bovinae; Bubalus
 
 # Sheep Ovis Aries
 oviAri	Eutheria; Laurasiatheria; Cetartiodactyla; Ruminantia; Pecora; Bovidae; Caprinae; Ovis
@@ -94,6 +109,9 @@ pteAle	Eutheria; Laurasiatheria; Chiroptera; Megachiroptera; Pteropodidae; Ptero
 
 # Megabat - Pteropus vampyrus
 pteVam	Eutheria; Laurasiatheria; Chiroptera; Megachiroptera; Pteropodidae; Pteropodinae; Pteropus
+
+# Greater horseshoe bat Rhinolophus ferrumequinum
+rhiFer	Eutheria; Boreoeutheria; Laurasiatheria; Chiroptera; Microchiroptera; Rhinolophidae; Rhinolophinae; Rhinolophus
 
 # Indian false vampire - Megaderma lyra
 megLyr	Eutheria; Laurasiatheria; Chiroptera; Microchiroptera; Megadermatidae; Megaderma
@@ -127,6 +145,9 @@ musFur	Eutheria; Laurasiatheria; Carnivora; Caniformia; Mustelidae; Mustelinae; 
 
 # Dog Canis familiaris
 canFam	Eutheria; Laurasiatheria; Carnivora; Caniformia; Canidae; Canis
+
+# Gray wolf - Canis lupus
+canLup	Eutheria; Boreoeutheria; Laurasiatheria; Carnivora; Caniformia; Canidae; Canis
 
 # Panda Ailuropoda melanoleuca
 ailMel	Eutheria; Laurasiatheria; Carnivora; Caniformia; Ursidae; Ailuropoda

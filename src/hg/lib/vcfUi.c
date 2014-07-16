@@ -1,6 +1,9 @@
 /* vcfUi - Variant Call Format user interface controls that are shared
  * between more than one CGI. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "cheapcgi.h"
 #include "errCatch.h"
@@ -9,10 +12,8 @@
 #include "jsHelper.h"
 #include "vcf.h"
 #include "vcfUi.h"
-#if (defined USE_TABIX && defined KNETFILE_HOOKS)
 #include "knetUdc.h"
 #include "udc.h"
-#endif//def USE_TABIX && KNETFILE_HOOKS
 
 INLINE char *nameOrDefault(char *thisName, char *defaultVal)
 /* If thisName is not a placeholder value, return it; otherwise return default. */
@@ -124,19 +125,26 @@ if (vcff != NULL && vcff->genotypeCount > 1)
 static struct vcfFile *vcfHopefullyOpenHeader(struct cart *cart, struct trackDb *tdb)
 /* Defend against network errors and return the vcfFile object with header data, or NULL. */
 {
-#if (defined USE_TABIX && defined KNETFILE_HOOKS)
 knetUdcInstall();
 if (udcCacheTimeout() < 300)
     udcSetCacheTimeout(300);
-#endif//def USE_TABIX && KNETFILE_HOOKS
 char *db = cartString(cart, "db");
-struct sqlConnection *conn = hAllocConnTrack(db, tdb);
+char *table = tdb->table;
+char *dbTableName = trackDbSetting(tdb, "dbTableName");
+struct sqlConnection *conn;
+if (isCustomTrack(tdb->track) && isNotEmpty(dbTableName))
+    {
+    conn =  hAllocConn(CUSTOM_TRASH);
+    table = dbTableName;
+    }
+else
+    conn = hAllocConnTrack(db, tdb);
 char *fileOrUrl = NULL;
 char *chrom = cartOptionalString(cart, "c");
 if (chrom != NULL)
-    fileOrUrl = bbiNameFromSettingOrTableChrom(tdb, conn, tdb->table, chrom);
+    fileOrUrl = bbiNameFromSettingOrTableChrom(tdb, conn, table, chrom);
 if (fileOrUrl == NULL)
-    fileOrUrl = bbiNameFromSettingOrTableChrom(tdb, conn, tdb->table, hDefaultChrom(db));
+    fileOrUrl = bbiNameFromSettingOrTableChrom(tdb, conn, table, hDefaultChrom(db));
 hFreeConn(&conn);
 if (fileOrUrl == NULL)
     return NULL;
@@ -146,7 +154,10 @@ struct vcfFile *vcff = NULL;
 struct errCatch *errCatch = errCatchNew();
 if (errCatchStart(errCatch))
     {
-    vcff = vcfTabixFileMayOpen(fileOrUrl, NULL, 0, 0, vcfMaxErr, -1);
+    if (startsWithWord("vcfTabix", tdb->type))
+	vcff = vcfTabixFileMayOpen(fileOrUrl, NULL, 0, 0, vcfMaxErr, -1);
+    else
+	vcff = vcfFileMayOpen(fileOrUrl, NULL, 0, 0, vcfMaxErr, -1, FALSE);
     }
 errCatchEnd(errCatch);
 if (errCatch->gotError)
@@ -162,8 +173,7 @@ static void vcfCfgHapClusterEnable(struct cart *cart, struct trackDb *tdb, char 
 				   boolean parentLevel)
 /* Let the user enable/disable haplotype sorting display. */
 {
-boolean hapClustEnabled = cartUsualBooleanClosestToHome(cart, tdb, parentLevel,
-							VCF_HAP_ENABLED_VAR, TRUE);
+boolean hapClustEnabled = cartOrTdbBoolean(cart, tdb, VCF_HAP_ENABLED_VAR, TRUE);
 char cartVar[1024];
 safef(cartVar, sizeof(cartVar), "%s." VCF_HAP_ENABLED_VAR, name);
 cgiMakeCheckBox(cartVar, hapClustEnabled);
@@ -175,8 +185,7 @@ static void vcfCfgHapClusterColor(struct cart *cart, struct trackDb *tdb, char *
 /* Let the user choose how to color the sorted haplotypes. */
 {
 printf("<B>Haplotype coloring scheme:</B><BR>\n");
-char *colorBy = cartUsualStringClosestToHome(cart, tdb, parentLevel,
-					     VCF_HAP_COLORBY_VAR, VCF_DEFAULT_HAP_COLORBY);
+char *colorBy = cartOrTdbString(cart, tdb, VCF_HAP_COLORBY_VAR, VCF_DEFAULT_HAP_COLORBY);
 char varName[1024];
 safef(varName, sizeof(varName), "%s." VCF_HAP_COLORBY_VAR, name);
 cgiMakeRadioButton(varName, VCF_HAP_COLORBY_ALTONLY, sameString(colorBy, VCF_HAP_COLORBY_ALTONLY));
@@ -192,8 +201,7 @@ static void vcfCfgHapClusterTreeAngle(struct cart *cart, struct trackDb *tdb, ch
 /* Let the user choose branch shape. */
 {
 printf("<B>Haplotype clustering tree leaf shape:</B><BR>\n");
-char *treeAngle = cartUsualStringClosestToHome(cart, tdb, parentLevel,
-					     VCF_HAP_TREEANGLE_VAR, VCF_DEFAULT_HAP_TREEANGLE);
+char *treeAngle = cartOrTdbString(cart, tdb, VCF_HAP_TREEANGLE_VAR, VCF_DEFAULT_HAP_TREEANGLE);
 char varName[1024];
 safef(varName, sizeof(varName), "%s." VCF_HAP_TREEANGLE_VAR, name);
 cgiMakeRadioButton(varName, VCF_HAP_TREEANGLE_TRIANGLE,
@@ -211,8 +219,7 @@ static void vcfCfgHapClusterHeight(struct cart *cart, struct trackDb *tdb, struc
 if (vcff != NULL && vcff->genotypeCount > 1)
     {
     printf("<B>Haplotype sorting display height:</B> \n");
-    int cartHeight = cartUsualIntClosestToHome(cart, tdb, parentLevel,
-					       VCF_HAP_HEIGHT_VAR, VCF_DEFAULT_HAP_HEIGHT);
+    int cartHeight = cartOrTdbInt(cart, tdb, VCF_HAP_HEIGHT_VAR, VCF_DEFAULT_HAP_HEIGHT);
     char varName[1024];
     safef(varName, sizeof(varName), "%s." VCF_HAP_HEIGHT_VAR, name);
     cgiMakeIntVarInRange(varName, cartHeight, "Height (in pixels) of track", 5, "4", "2500");
@@ -238,12 +245,11 @@ static void vcfCfgMinQual(struct cart *cart, struct trackDb *tdb, struct vcfFile
 {
 char cartVar[1024];
 safef(cartVar, sizeof(cartVar), "%s." VCF_APPLY_MIN_QUAL_VAR, name);
-boolean applyFilter = cartUsualBooleanClosestToHome(cart, tdb, parentLevel,
-					VCF_APPLY_MIN_QUAL_VAR, VCF_DEFAULT_APPLY_MIN_QUAL);
+boolean applyFilter = cartOrTdbBoolean(cart, tdb, VCF_APPLY_MIN_QUAL_VAR,
+				       VCF_DEFAULT_APPLY_MIN_QUAL);
 cgiMakeCheckBox(cartVar, applyFilter);
 printf("<B>Exclude variants with Quality/confidence score (QUAL) score less than</B>\n");
-double minQual = cartUsualDoubleClosestToHome(cart, tdb, parentLevel, VCF_MIN_QUAL_VAR,
-					      VCF_DEFAULT_MIN_QUAL);
+double minQual = cartOrTdbDouble(cart, tdb, VCF_MIN_QUAL_VAR, VCF_DEFAULT_MIN_QUAL);
 safef(cartVar, sizeof(cartVar), "%s." VCF_MIN_QUAL_VAR, name);
 cgiMakeDoubleVar(cartVar, minQual, 10);
 printf("<BR>\n");
@@ -287,8 +293,8 @@ static void vcfCfgMinAlleleFreq(struct cart *cart, struct trackDb *tdb, struct v
 /* Show input for minimum allele frequency, if we can extract it from the VCF INFO column. */
 {
 printf("<B>Minimum minor allele frequency (if INFO column includes AF or AC+AN):</B>\n");
-double cartMinFreq = cartUsualDoubleClosestToHome(cart, tdb, parentLevel,
-					   VCF_MIN_ALLELE_FREQ_VAR, VCF_DEFAULT_MIN_ALLELE_FREQ);
+double cartMinFreq = cartOrTdbDouble(cart, tdb, VCF_MIN_ALLELE_FREQ_VAR,
+				     VCF_DEFAULT_MIN_ALLELE_FREQ);
 char varName[1024];
 safef(varName, sizeof(varName), "%s." VCF_MIN_ALLELE_FREQ_VAR, name);
 cgiMakeDoubleVarInRange(varName, cartMinFreq, "minor allele frequency between 0.0 and 0.5", 5,
@@ -316,9 +322,12 @@ if (vcff != NULL)
 	     "Local haplotype blocks can often be identified using this display.</P>");
 	vcfCfgHapCluster(cart, tdb, vcff, name, parentLevel);
 	}
-    puts("<H3>Filters</H3>");
-    vcfCfgMinQual(cart, tdb, vcff, name, parentLevel);
-    vcfCfgFilterColumn(cart, tdb, vcff, name, parentLevel);
+    if (differentString(tdb->track,"evsEsp6500"))
+        {
+        puts("<H3>Filters</H3>");
+        vcfCfgMinQual(cart, tdb, vcff, name, parentLevel);
+        vcfCfgFilterColumn(cart, tdb, vcff, name, parentLevel);
+        }
     vcfCfgMinAlleleFreq(cart, tdb, vcff, name, parentLevel);
     }
 else

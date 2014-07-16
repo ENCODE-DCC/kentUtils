@@ -1,4 +1,7 @@
 /* liftOver - Move annotations from one assembly to another. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -14,6 +17,7 @@
 #include "liftOver.h"
 #include "portable.h"
 #include "obscure.h"
+#include "net.h"
 
 
 struct chromMap
@@ -40,7 +44,14 @@ else
 void readLiftOverMap(char *fileName, struct hash *chainHash)
 /* Read map file into hashes. */
 {
-struct lineFile *lf = lineFileOpen(fileName, TRUE);
+
+struct lineFile *lf;
+struct netParsedUrl *npu;
+if (udcIsLocal(fileName))
+    lf = lineFileOpen(fileName, TRUE);
+else
+    lf = netHttpLineFileMayOpen(fileName, &npu);
+
 struct chain *chain;
 struct chromMap *map;
 int chainCount = 0;
@@ -1771,7 +1782,8 @@ void filterOutMissingChains(struct liftOverChain **pChainList)
 {
 while(*pChainList)
     {
-    if (fileSize((*pChainList)->path)==-1)
+    char *newPath = hReplaceGbdb((*pChainList)->path);
+    if (!udcExists(newPath))
 	{
 	struct liftOverChain *temp = *pChainList;
 	*pChainList = (*pChainList)->next;

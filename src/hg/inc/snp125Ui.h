@@ -1,4 +1,7 @@
 /* snp125Ui.c - enums & char arrays for snp UI features and shared util code */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 
 #ifndef SNP125UI_H
@@ -96,7 +99,8 @@ extern char *snp125ValidLabels[];
 extern char *snp125ValidOldColorVars[];
 extern char *snp125ValidDataName[];
 extern char *snp125ValidDefault[];
-extern int snp125ValidArraySize;
+extern int snp125ValidArraySizeHuman;
+extern int snp125ValidArraySizeNonHuman;
 
 /****** Func related controls *******/
 

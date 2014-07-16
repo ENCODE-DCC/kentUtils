@@ -1,4 +1,7 @@
 /* bigBedToBed - Convert from bigBed to ascii bed format.. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -18,7 +21,7 @@ void usage()
 /* Explain usage and exit. */
 {
 errAbort(
-  "bigBedToBed - Convert from bigBed to ascii bed format.\n"
+  "bigBedToBed v1 - Convert from bigBed to ascii bed format.\n"
   "usage:\n"
   "   bigBedToBed input.bb output.bed\n"
   "options:\n"

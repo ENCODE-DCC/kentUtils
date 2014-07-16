@@ -1,12 +1,17 @@
 /* maf.c - Read/write maf format. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "linefile.h"
-#include "errabort.h"
+#include "errAbort.h"
 #include "obscure.h"
 #include "dnautil.h"
 #include "axt.h"
 #include "maf.h"
 #include "hash.h"
+#include "net.h"
 #include <fcntl.h>
 
 
@@ -20,7 +25,12 @@ struct lineFile *lf;
 char *line, *word;
 char *sig = "##maf";
 
-if ((lf = lineFileMayOpen(fileName, TRUE)) == NULL)
+if ( hasProtocol(fileName))
+    lf = lineFileUdcMayOpen(fileName, TRUE);
+else
+    lf = lineFileMayOpen(fileName, TRUE);
+
+if (lf == NULL)
     return NULL;
 AllocVar(mf);
 mf->lf = lf;

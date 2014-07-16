@@ -2,6 +2,9 @@
  * generated cartDb.c and cartDb.sql.  This header links the database and
  * the RAM representation of objects. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #ifndef CARTDB_H
 #define CARTDB_H
 
@@ -19,7 +22,23 @@ struct cartDb
     char *firstUse;	/* First time this was used */
     char *lastUse;	/* Last time this was used */
     int useCount;	/* Number of times used */
+    char *sessionKey;	/* Random Key for session security */
     };
+
+boolean cartDbHasSessionKey(struct sqlConnection *conn, char *table);
+/* Check to see if the table has the sessionKey field */
+
+boolean cartDbUseSessionKey();
+/* Check settings and and state to determine if sessionKey is in use */
+
+void cartDbSecureId(char *buf, int bufSize, struct cartDb *cartDb);
+/* Return combined string of session id plus sessionKey in buf if turned on.*/
+
+unsigned int cartDbParseId(char *id, char **pSessionKey);
+/* Parse out and return just the numeric id from the id_sessionKey string. */
+
+char *cartDbMakeRandomKey(int numBits);
+/* Generate base64 encoding of a random key of at least size numBits returning string to be freed when done */
 
 void cartDbStaticLoad(char **row, struct cartDb *ret);
 /* Load a row from cartDb table into ret.  The contents of ret will

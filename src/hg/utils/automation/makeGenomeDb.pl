@@ -555,9 +555,9 @@ awk '{print \$1 "\t" \$2 "\t$HgAutomate::gbdb/$db/$db.2bit";}' chrom.sizes \\
 _EOF_
     );
   if ($gotAgp) {
+    my $splitThreshold = $HgAutomate::splitThreshold;
     $bossScript->add(<<_EOF_
-
-if (`wc -l < chrom.sizes` < 1000) then
+if (`wc -l < chrom.sizes` < $splitThreshold) then
   # Install per-chrom .agp files for download.
   $acat $agpFiles | grep -v '^#' \\
   | splitFileByColumn -col=1 -ending=.agp stdin $topDir -chromDirs
@@ -766,7 +766,8 @@ _EOF_
   my $allAgp = "$topDir/$db.agp";
   $allAgp = "$bedDir/hgFakeAgp/$db.agp" if (! $gotAgp);
   if ($chromBased) {
-    $bossScript->add(<<_EOF_
+    if ($opt_splitGoldGap) {
+      $bossScript->add(<<_EOF_
 # Split AGP into per-chrom files/dirs so we can load split gold and gap tables.
 cp /dev/null chrom.lst.tmp
 foreach chr (`awk '{print \$1;}' chrom.sizes`)
@@ -778,8 +779,7 @@ end
 sort -u chrom.lst.tmp > chrom.lst
 rm chrom.lst.tmp
 _EOF_
-    );
-    if ($opt_splitGoldGap) {
+      );
       $bossScript->add("hgGoldGapGl -noGl -chromLst=chrom.lst $db $topDir .\n");
     } else {
       $bossScript->add("hgGoldGapGl -noGl $db $allAgp\n");
@@ -846,23 +846,24 @@ _EOF_
   $bossScript->add(<<_EOF_
 
 # Load gc5base
-mkdir -p $HgAutomate::gbdb/$db/bbi
-rm -f $HgAutomate::gbdb/$db/bbi/gc5Base.bw
-ln -s $bedDir/gc5Base/$db.gc5Base.bw $HgAutomate::gbdb/$db/bbi/gc5Base.bw
+mkdir -p $HgAutomate::gbdb/$db/bbi/gc5BaseBw
+rm -f $HgAutomate::gbdb/$db/bbi/gc5BaseBw/gc5Base.bw
+ln -s $bedDir/gc5Base/$db.gc5Base.bw $HgAutomate::gbdb/$db/bbi/gc5BaseBw/gc5Base.bw
 hgsql $db -e 'drop table if exists gc5BaseBw; \\
             create table gc5BaseBw (fileName varchar(255) not null); \\
-            insert into gc5BaseBw values ("$HgAutomate::gbdb/$db/bbi/gc5Base.bw");'
+            insert into gc5BaseBw values ("$HgAutomate::gbdb/$db/bbi/gc5BaseBw/gc5Base.bw");'
 _EOF_
   );
   if (defined $qualFiles) {
     $bossScript->add(<<_EOF_
 
 # Load qual
-rm -f $HgAutomate::gbdb/$db/bbi/quality.bw
-ln -s $bedDir/qual/$db.quality.bw $HgAutomate::gbdb/$db/bbi/quality.bw
+mkdir -p $HgAutomate::gbdb/$db/bbi/qualityBw
+rm -f $HgAutomate::gbdb/$db/bbi/qualityBw/quality.bw
+ln -s $bedDir/qual/$db.quality.bw $HgAutomate::gbdb/$db/bbi/qualityBw/quality.bw
 hgsql $db -e 'drop table if exists qualityBw; \\
             create table qualityBw (fileName varchar(255) not null); \\
-            insert into qualityBw values ("$HgAutomate::gbdb/$db/bbi/quality.bw");'
+            insert into qualityBw values ("$HgAutomate::gbdb/$db/bbi/qualityBw/quality.bw");'
 _EOF_
     );
   }
@@ -1049,8 +1050,8 @@ to find Genome Browser tracks that match specific selection criteria.
 <P>
 <B>Download sequence and annotation data:</B>
 <UL>
+<LI><A HREF="../goldenPath/help/ftp.html">Using rsync</A> (recommended)
 <LI><A HREF="ftp://hgdownload.cse.ucsc.edu/goldenPath/$db/">Using FTP</A>
-(recommended)
 <LI><A HREF="http://hgdownload.cse.ucsc.edu/downloads.html#$anchorRoot">Using HTTP</A>
 <LI><A HREF="../goldenPath/credits.html#${anchorRoot}_credits">Data use conditions and
 restrictions</A>
@@ -1076,6 +1077,7 @@ my %goldTypes = (
 'D' => 'draft sequence',
 'F' => 'finished sequence',
 'O' => 'other sequence',
+'P' => 'pre draft',
 'W' => 'whole genome shotgun'
 );
 # definition of gap types in the AGP file
@@ -1122,10 +1124,10 @@ This track shows the gaps in the $assemblyDate $em\$organism$noEm genome assembl
 <P>
 Genome assembly procedures are covered in the NCBI
 <A HREF="http://www.ncbi.nlm.nih.gov/projects/genome/assembly/assembly.shtml"
-TARGET=_blank>assembly documentation.</A><BR>
+TARGET=_blank>assembly documentation</A>.<BR>
 NCBI also provides
 <A HREF="http://www.ncbi.nlm.nih.gov/assembly/$ncbiAssemblyId"
-TARGET="_blank">specific information about this assembly.</A>
+TARGET="_blank">specific information about this assembly</A>.
 </P>
 <P>
 The definition of the gaps in this assembly is from the
@@ -1224,10 +1226,10 @@ This track shows the sequences used in the $assemblyDate $em\$organism$noEm geno
 <P>
 Genome assembly procedures are covered in the NCBI
 <A HREF="http://www.ncbi.nlm.nih.gov/projects/genome/assembly/assembly.shtml"
-TARGET=_blank>assembly documentation.</A><BR>
+TARGET=_blank>assembly documentation</A>.<BR>
 NCBI also provides
 <A HREF="http://www.ncbi.nlm.nih.gov/assembly/$ncbiAssemblyId"
-TARGET="_blank">specific information about this assembly.</A>
+TARGET="_blank">specific information about this assembly</A>.
 </P>
 <P>
 The definition of this assembly is from the
@@ -1246,7 +1248,7 @@ blocks.  The relative order and orientation of the contigs
 within a scaffold is always known; therefore, a line is drawn in the graphical
 display to bridge the blocks.</P>
 <P>
-Component types found in this track (with counts of that type in parenthesis):
+Component types found in this track (with counts of that type in parentheses):
 <UL>
 _EOF_
     ;
@@ -1338,6 +1340,14 @@ $HgAutomate::git archive --remote=git://genome-source.cse.ucsc.edu/kent.git \\
   --prefix=kent/ HEAD src/hg/makeDb/trackDb/loadTracks \\
 src/hg/makeDb/trackDb/$dbDbSpeciesDir \\
 src/hg/makeDb/trackDb/trackDb.chainNet.ra \\
+src/hg/makeDb/trackDb/trackDb.chainNet.primates.ra \\
+src/hg/makeDb/trackDb/trackDb.chainNet.euarchontoglires.ra \\
+src/hg/makeDb/trackDb/trackDb.chainNet.laurasiatheria.ra \\
+src/hg/makeDb/trackDb/trackDb.chainNet.afrotheria.ra \\
+src/hg/makeDb/trackDb/trackDb.chainNet.mammal.ra \\
+src/hg/makeDb/trackDb/trackDb.chainNet.birds.ra \\
+src/hg/makeDb/trackDb/trackDb.chainNet.sarcopterygii.ra \\
+src/hg/makeDb/trackDb/trackDb.chainNet.fish.ra \\
 src/hg/makeDb/trackDb/chainNetPetMar1.ra \\
 src/hg/makeDb/trackDb/chainNetPetMar2.ra \\
 src/hg/makeDb/trackDb/trackDb.nt.ra \\

@@ -3,13 +3,27 @@
 # an object which can be loaded and saved from RAM in a fairly 
 # automatic way.
 
+#Settings used to configure warehouse
+CREATE TABLE edwSettings (
+    id int unsigned auto_increment,	# Settings ID
+    name varchar(255) default '',	# Settings name, can't be reused
+    val varchar(255) default '',	# Settings value, some undefined but not huge thing
+              #Indices
+    PRIMARY KEY(id),
+    UNIQUE(name),
+    INDEX(val)
+);
+
 #Someone who submits files to or otherwise interacts with big data warehouse
 CREATE TABLE edwUser (
     id int unsigned auto_increment,	# Autoincremented user ID
     email varchar(255) default '',	# Email address - required
+    uuid char(37) default 0,	# Help to synchronize us with Stanford.
+    isAdmin tinyint default 0,	# If true the use can modify other people's files too.
               #Indices
     PRIMARY KEY(id),
-    UNIQUE(email)
+    UNIQUE(email),
+    INDEX(uuid)
 );
 
 #A script that is authorized to submit on behalf of a user
@@ -81,8 +95,8 @@ CREATE TABLE edwFile (
     PRIMARY KEY(id),
     INDEX(submitId),
     INDEX(submitDirId),
-    INDEX(submitFileName(32)),
-    UNIQUE(edwFileName(32)),
+    INDEX(submitFileName(64)),
+    INDEX(edwFileName(32)),
     INDEX(md5)
 );
 
@@ -134,8 +148,34 @@ CREATE TABLE edwAssembly (
     twoBitId int unsigned default 0,	# File ID of associated twoBit file
     baseCount bigint default 0,	# Count of bases including N's
     realBaseCount bigint default 0,	# Count of non-N bases in assembly
+    seqCount int unsigned default 0,	# Number of chromosomes or other distinct sequences in assembly
               #Indices
     PRIMARY KEY(id)
+);
+
+#A biosample - not much info here, just enough to drive analysis pipeline
+CREATE TABLE edwBiosample (
+    id int unsigned auto_increment,	# Biosample id
+    term varchar(255) default '',	# Human readable.  Shared with ENCODE2.
+    taxon int unsigned default 0,	# NCBI taxon number - 9606 for human.
+    sex varchar(255) default '',	# One letter code: M male, F female, B both, U unknown
+              #Indices
+    PRIMARY KEY(id),
+    INDEX(term)
+);
+
+#An experiment - ideally will include a couple of biological replicates. Downloaded from Stanford.
+CREATE TABLE edwExperiment (
+    accession char(16) default 0,	# Something like ENCSR000CFA. ID shared with Stanford.
+    dataType varchar(255) default '',	# Something liek RNA-seq, DNase-seq, ChIP-seq. Computed at UCSC.
+    lab varchar(255) default '',	# Lab PI name and institution. Is lab.title at Stanford.
+    biosample varchar(255) default '',	# Cell line name, tissue source, etc. Is biosample_term_name at Stanford.
+    rfa varchar(255) default '',	# Something like 'ENCODE2' or 'ENCODE3'.  Is award.rfa at Stanford.
+    assayType varchar(255) default '',	# Similar to dataType. Is assay_term_name at Stanford.
+    ipTarget varchar(255) default '',	# The target for the immunoprecipitation in ChIP & RIP.
+    control varchar(255) default '',	# Primary control for experiment.  Usually another experiment accession.
+              #Indices
+    UNIQUE(accession)
 );
 
 #A file that has been uploaded, the format checked, and for which at least minimal metadata exists
@@ -158,14 +198,17 @@ CREATE TABLE edwValidFile (
     mapRatio double default 0,	# Proportion of items that map to genome
     sampleCoverage double default 0,	# Proportion of assembly covered by at least one item in sample
     depth double default 0,	# Estimated genome-equivalents covered by possibly overlapping data
-    singleQaStatus tinyint default 0,	# 0 for untested, 1 for pass, -1 for fail
-    replicateQaStatus tinyint default 0,	# 0 for untested, 1 for pass, -1 for fail
+    singleQaStatus tinyint default 0,	# 0 = untested, 1 =  pass, -1 = fail, 2 = forced pass, -2 = forced fail
+    replicateQaStatus tinyint default 0,	# 0 = untested, 1 = pass, -1 = fail, 2 = forced pass, -2 = forced fail
     technicalReplicate varchar(255) default '',	# Manifest's technical_replicate tag. Values 1,2,3... pooled or ''
     pairedEnd varchar(255) default '',	# The paired_end tag from the manifest.  Values 1,2 or ''
+    qaVersion tinyint default 0,	# Version of QA pipeline making status decisions
+    uniqueMapRatio double default 0,	# Fraction of reads that map uniquely to genome for bams and fastqs
               #Indices
     PRIMARY KEY(id),
     INDEX(licensePlate),
     UNIQUE(fileId),
+    INDEX(format(12)),
     INDEX(outputType(16)),
     INDEX(experiment(16))
 );
@@ -204,6 +247,41 @@ CREATE TABLE edwFastqFile (
               #Indices
     PRIMARY KEY(id),
     UNIQUE(fileId)
+);
+
+#Info on what is in a bam file beyond whet's in edwValidFile
+CREATE TABLE edwBamFile (
+    id int unsigned auto_increment,	# ID in this table
+    fileId int unsigned default 0,	# ID in edwFile table.
+    isPaired tinyint default 0,	# Set to 1 if paired reads, 0 if single
+    isSortedByTarget tinyint default 0,	# Set to 1 if sorted by target,pos
+    readCount bigint default 0,	# # of reads in file
+    readBaseCount bigint default 0,	# # of bases in all reads added up
+    mappedCount bigint default 0,	# # of reads that map
+    uniqueMappedCount bigint default 0,	# # of reads that map to a unique position
+    readSizeMean double default 0,	# Average read size
+    readSizeStd double default 0,	# Standard deviation of read size
+    readSizeMin int default 0,	# Minimum read size
+    readSizeMax int default 0,	# Maximum read size
+    u4mReadCount int default 0,	# Uniquely-mapped 4 million read actual read # (usually 4M)
+    u4mUniquePos int default 0,	# Unique positions in target of the 4M reads that map to single pos
+    u4mUniqueRatio double default 0,	# u4mUniqPos/u4mReadCount - measures library diversity
+    targetBaseCount bigint default 0,	# Count of bases in mapping target
+    targetSeqCount int unsigned default 0,	# Number of chromosomes or other distinct sequences in mapping target
+              #Indices
+    PRIMARY KEY(id),
+    UNIQUE(fileId)
+);
+
+#Record of a QA failure.
+CREATE TABLE edwQaFail (
+    id int unsigned auto_increment,	# ID of failure
+    fileId int unsigned default 0,	# File that failed
+    qaVersion int unsigned default 0,	# QA pipeline version
+    reason longblob,	# reason for failure
+              #Indices
+    PRIMARY KEY(id),
+    INDEX(fileId)
 );
 
 #A target for our enrichment analysis.
@@ -307,8 +385,50 @@ CREATE TABLE edwQaPairedEndFastq (
     recordComplete tinyint default 0,	# Flag to avoid a race condition. Ignore record if this is 0
               #Indices
     PRIMARY KEY(id),
-    UNIQUE(fileId1),
-    UNIQUE(fileId2)
+    INDEX(fileId1),
+    INDEX(fileId2)
+);
+
+#Information about proportion of signal in a wig that lands under spots in a peak or bed file
+CREATE TABLE edwQaWigSpot (
+    id int unsigned auto_increment,	# Id of this wig/spot intersection
+    wigId int unsigned default 0,	# Id of bigWig file
+    spotId int unsigned default 0,	# Id of a bigBed file probably broadPeak or narrowPeak
+    spotRatio double default 0,	# Ratio of signal in spots to total signal,  between 0 and 1
+    enrichment double default 0,	# Enrichment in spots compared to genome overall
+    basesInGenome bigint default 0,	# Number of bases in genome
+    basesInSpots bigint default 0,	# Number of bases in spots
+    sumSignal double default 0,	# Total signal
+    spotSumSignal double default 0,	# Total signal in spots
+              #Indices
+    PRIMARY KEY(id),
+    INDEX(wigId),
+    INDEX(spotId)
+);
+
+#Statistics calculated based on a 5M sample of DNAse aligned reads from a bam file.
+CREATE TABLE edwQaDnaseSingleStats5m (
+    id int unsigned auto_increment,	# Id of this row in table.
+    fileId int unsigned default 0,	# Id of bam file this is calculated from
+    sampleReads int unsigned default 0,	# Number of mapped reads 
+    spotRatio double default 0,	# Ratio of signal in spots to total signal,  between 0 and 1
+    enrichment double default 0,	# Enrichment in spots compared to genome overall
+    basesInGenome bigint default 0,	# Number of bases in genome
+    basesInSpots bigint default 0,	# Number of bases in spots
+    sumSignal double default 0,	# Total signal
+    spotSumSignal double default 0,	# Total signal in spots
+    estFragLength varchar(255) default '',	# Up to three comma separated strand cross-correlation peaks
+    corrEstFragLen varchar(255) default '',	# Up to three cross strand correlations at the given peaks
+    phantomPeak int default 0,	# Read length/phantom peak strand shift
+    corrPhantomPeak double default 0,	# Correlation value at phantom peak
+    argMinCorr int default 0,	# strand shift at which cross-correlation is lowest
+    minCorr double default 0,	# minimum value of cross-correlation
+    nsc double default 0,	# Normalized strand cross-correlation coefficient (NSC) = corrEstFragLen/minCorr
+    rsc double default 0,	# Relative strand cross-correlation coefficient (RSC)
+    rscQualityTag int default 0,	# based on thresholded RSC (codes: -2:veryLow,-1:Low,0:Medium,1:High,2:veryHigh)
+              #Indices
+    PRIMARY KEY(id),
+    INDEX(fileId)
 );
 
 #A job to be run asynchronously and not too many all at once.
@@ -317,8 +437,9 @@ CREATE TABLE edwJob (
     commandLine longblob,	# Command line of job
     startTime bigint default 0,	# Start time in seconds since 1970
     endTime bigint default 0,	# End time in seconds since 1970
-    stderr longblob,	# The output to stderr of the run - may be nonembty even with success
+    stderr longblob,	# The output to stderr of the run - may be nonempty even with success
     returnCode int default 0,	# The return code from system command - 0 for success
+    pid int default 0,	# Process ID for running processes
               #Indices
     PRIMARY KEY(id)
 );
@@ -329,8 +450,9 @@ CREATE TABLE edwSubmitJob (
     commandLine longblob,	# Command line of job
     startTime bigint default 0,	# Start time in seconds since 1970
     endTime bigint default 0,	# End time in seconds since 1970
-    stderr longblob,	# The output to stderr of the run - may be nonembty even with success
+    stderr longblob,	# The output to stderr of the run - may be nonempty even with success
     returnCode int default 0,	# The return code from system command - 0 for success
+    pid int default 0,	# Process ID for running processes
               #Indices
     PRIMARY KEY(id)
 );

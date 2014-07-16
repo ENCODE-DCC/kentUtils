@@ -1,6 +1,9 @@
 /* jsonParse - routines to parse JSON strings and traverse and pick things out of the
  * resulting object tree. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "hash.h"
 #include "dystring.h"
@@ -128,10 +131,12 @@ for(i = 0;; i++)
                 c = '\t';
                 break;
             case 'u':
-                errAbort("Unicode in JSON is unsupported");
+		// Pass through Unicode
+		dyStringAppendC(ds, '\\');
                 break;
             default:
                 // we don't need to convert \,/ or "
+		dyStringAppendC(ds, c);
                 break;
             }
         dyStringAppendC(ds, c);
@@ -579,7 +584,7 @@ static void printIndentedNameEndCallback(struct jsonElement *ele, char *name,
 {
 struct jsonPrintContext *jps = context;
 jps->indent -= jps->indentPer;
-jsonPrintOneEnd(ele, name, isLast, jps->indent, stdout);
+jsonPrintOneEnd(ele, name, isLast, jps->indent, jps->f);
 }
 
 void jsonPrintToFile(struct jsonElement *root, char *name, FILE *f, int indentPer)
@@ -617,7 +622,7 @@ if (ele->type != jsonNumber)
 return ele->val.jeNumber;
 }
 
-long jsonDoubleVal(struct jsonElement *ele, char *name)
+double jsonDoubleVal(struct jsonElement *ele, char *name)
 /* Enforce element is type jsonDouble and return value. */
 {
 if (ele->type != jsonDouble)
@@ -625,7 +630,7 @@ if (ele->type != jsonDouble)
 return ele->val.jeDouble;
 }
 
-long jsonBooleanVal(struct jsonElement *ele, char *name)
+boolean jsonBooleanVal(struct jsonElement *ele, char *name)
 /* Enforce element is type jsonBoolean and return value. */
 {
 if (ele->type != jsonBoolean)

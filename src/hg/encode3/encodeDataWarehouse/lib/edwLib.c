@@ -1,11 +1,14 @@
 /* edwLib - routines shared by various encodeDataWarehouse programs.    See also encodeDataWarehouse
  * module for tables and routines to access structs built on tables. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "hex.h"
 #include "dystring.h"
 #include "jksql.h"
-#include "errabort.h"
+#include "errAbort.h"
 #include "openssl/sha.h"
 #include "base64.h"
 #include "basicBed.h"
@@ -18,18 +21,23 @@
 #include "obscure.h"
 #include "bamFile.h"
 #include "raToStruct.h"
+#include "web.h"
+#include "encode3/encode3Valid.h"
 #include "encodeDataWarehouse.h"
 #include "edwLib.h"
 #include "edwFastqFileFromRa.h"
+#include "edwBamFileFromRa.h"
+#include "edwQaWigSpotFromRa.h"
 
 
 /* System globals - just a few ... for now.  Please seriously not too many more. */
 char *edwDatabase = "encodeDataWarehouse";
-char *edwLicensePlatePrefix = "ENCFF";
 int edwSingleFileTimeout = 4*60*60;   // How many seconds we give ourselves to fetch a single file
 
 char *edwRootDir = "/data/encode3/encodeDataWarehouse/";
+char *eapRootDir = "/data/encode3/encodeAnalysisPipeline/";
 char *edwValDataDir = "/data/encode3/encValData/";
+char *edwDaemonEmail = "edw@encodedcc.sdsc.edu";
 
 struct sqlConnection *edwConnect()
 /* Returns a read only connection to database. */
@@ -277,14 +285,30 @@ if (owner == NULL)
 return cloneString(owner->email);
 }
 
+int edwFindUserIdFromEmail(struct sqlConnection *conn, char *userEmail)
+/* Return true id of this user */
+{
+char query[256];
+sqlSafef(query, sizeof(query), "select id from edwUser where email = '%s'", userEmail);
+return sqlQuickNum(conn, query);
+}
+
+boolean edwUserIsAdmin(struct sqlConnection *conn, char *userEmail)
+/* Return true if the user is an admin */
+{
+char query[256];
+sqlSafef(query, sizeof(query), "select isAdmin from edwUser where email = '%s'", userEmail);
+int isAdmin = sqlQuickNum(conn, query);
+if (isAdmin == 1) return TRUE;
+return FALSE;
+}
+
 void edwWarnUnregisteredUser(char *email)
 /* Put up warning message about unregistered user and tell them how to register. */
 {
-warn("No user exists with email %s.  If you need an account please contact your "
-	 "ENCODE DCC data wrangler, or someone you know who already does have an "
-	 "ENCODE Data Warehouse account, and have them create an account for you with "
-	 "http://%s/cgi-bin/edwWebCreateUser"
-	 , email, getenv("SERVER_NAME"));
+warn("No user exists with email %s. If you need an account please contact your "
+	 "ENCODE DCC data wrangler and have them create an account for you."
+	 , email);
 }
 
 
@@ -466,38 +490,35 @@ safef(edwFile, PATH_LEN, "%s%s%s", edwDir, baseName, suffix);
 safef(serverPath, PATH_LEN, "%s%s", edwRootDir, edwFile);
 }
 
-#ifdef OLD
-void edwMakePlateFileNameAndPath(int edwFileId, char *submitFileName,
-    char licensePlate[edwMaxPlateSize], char edwFile[PATH_LEN], char serverPath[PATH_LEN])
-/* Convert file id to local file name, and full file path. Make any directories needed
- * along serverPath. */
+char *edwSetting(struct sqlConnection *conn, char *name)
+/* Return named settings value,  or NULL if setting doesn't exist. FreeMem when done. */
 {
-/* Preserve suffix.  Give ourselves up to two suffixes. */
-int nameSize = strlen(submitFileName);
-char *suffix = lastMatchCharExcept(submitFileName, submitFileName + nameSize, '.', '/');
-if (suffix != NULL)
-    {
-    char *secondSuffix = lastMatchCharExcept(submitFileName, suffix, '.', '/');
-    if (secondSuffix != NULL)
-        suffix = secondSuffix;
-    }
-suffix = emptyForNull(suffix);
-
-/* Figure out edw file name, starting with license plate. */
-edwMakeLicensePlate(edwLicensePlatePrefix, edwFileId, licensePlate, edwMaxPlateSize);
-
-/* Figure out directory and make any components not already there. */
-char edwDir[PATH_LEN];
-edwDirForTime(edwNow(), edwDir);
-char uploadDir[PATH_LEN];
-safef(uploadDir, sizeof(uploadDir), "%s%s", edwRootDir, edwDir);
-makeDirsOnPath(uploadDir);
-
-/* Figure out full file names */
-safef(edwFile, PATH_LEN, "%s%s%s", edwDir, licensePlate, suffix);
-safef(serverPath, PATH_LEN, "%s%s", edwRootDir, edwFile);
+char query[256];
+sqlSafef(query, sizeof(query), "select val from edwSettings where name='%s'", name);
+return sqlQuickString(conn, query);
 }
-#endif /* OLD */
+
+char *edwRequiredSetting(struct sqlConnection *conn, char *name)
+/* Returns setting, abort if it isn't found. FreeMem when done. */
+{
+char *val = edwSetting(conn, name);
+if (val == NULL)
+    errAbort("Required %s setting is not defined in edwSettings table", name);
+return val;
+}
+
+char *edwLicensePlateHead(struct sqlConnection *conn)
+/* Return license plate prefix for current database - something like TSTFF or DEVFF or ENCFF */
+{
+static char head[32];
+if (head[0] == 0)
+     {
+     char *prefix = edwRequiredSetting(conn, "prefix");
+     safef(head, sizeof(head), "%s", prefix);
+     }
+return head;
+}
+
 
 static char *localHostName = "localhost";
 static char *localHostDir = "";  
@@ -678,6 +699,14 @@ sqlSafef(query, sizeof(query), "select * from edwValidFile where fileId=%lld", f
 return edwValidFileLoadByQuery(conn, query);
 }
 
+struct edwExperiment *edwExperimentFromAccession(struct sqlConnection *conn, char *acc)
+/* Given something like 'ENCSR123ABC' return associated experiment. */
+{
+char query[128];
+sqlSafef(query, sizeof(query), "select * from edwExperiment where accession='%s'", acc);
+return edwExperimentLoadByQuery(conn, query);
+}
+
 struct genomeRangeTree *edwMakeGrtFromBed3List(struct bed3 *bedList)
 /* Make up a genomeRangeTree around bed file. */
 {
@@ -698,6 +727,35 @@ if (assembly == NULL)
     errAbort("Can't find assembly for %s", ucscDb);
 return assembly;
 }
+
+struct edwAssembly *edwAssemblyForId(struct sqlConnection *conn, long long id)
+/* Get assembly of given ID. */
+{
+char query[128];
+sqlSafef(query, sizeof(query), "select * from edwAssembly where id=%lld", id);
+struct edwAssembly *assembly = edwAssemblyLoadByQuery(conn, query);
+if (assembly == NULL)
+    errAbort("Can't find assembly for %lld", id);
+return assembly;
+}
+
+char *edwSimpleAssemblyName(char *assembly)
+/* Given compound name like male.hg19 return just hg19 */
+/* Given name of assembly return name where we want to do enrichment calcs. */
+{
+/* If it ends with one of our common assembly suffix, then do enrichment calcs
+ * in that space, rather than some subspace such as male, female, etc. */
+static char *specialAsm[] = {".hg19",".hg38",".mm9",".mm10",".dm3",".ce10",".dm6"};
+int i;
+for (i=0; i<ArraySize(specialAsm); ++i)
+    {
+    char *special = specialAsm[i];
+    if (endsWith(assembly, special))
+        return special+1;
+    }
+return assembly;
+}
+
 
 struct genomeRangeTree *edwGrtFromBigBed(char *fileName)
 /* Return genome range tree for simple (unblocked) bed */
@@ -723,11 +781,13 @@ return grt;
 boolean edwIsSupportedBigBedFormat(char *format)
 /* Return TRUE if it's one of the bigBed formats we support. */
 {
-return sameString(format, "broadPeak") || sameString(format, "narrowPeak") || 
-	 sameString(format, "bedLogR") || sameString(format, "bigBed") ||
-	 sameString(format, "bedRnaElements") || sameString(format, "bedRrbs") ||
-	 sameString(format, "openChromCombinedPeaks") || sameString(format, "peptideMapping") ||
-	 sameString(format, "shortFrags");
+int i;
+for (i=0; i<encode3BedTypeCount; ++i)
+    {
+    if (sameString(format, encode3BedTypeTable[i].name))
+        return TRUE;
+    }
+return FALSE;
 }
 
 void edwWriteErrToTable(struct sqlConnection *conn, char *table, int id, char *err)
@@ -795,6 +855,15 @@ if (retJobId != NULL)
 return aheadOfUs;
 }
 
+struct edwSubmit *edwSubmitFromId(struct sqlConnection *conn, long long id)
+/* Return submission with given ID or NULL if no such submission. */
+{
+char query[256];
+sqlSafef(query, sizeof(query), "select * from edwSubmit where id=%lld", id);
+return edwSubmitLoadByQuery(conn, query);
+}
+
+
 struct edwSubmit *edwMostRecentSubmission(struct sqlConnection *conn, char *url)
 /* Return most recent submission, possibly in progress, from this url */
 {
@@ -826,6 +895,24 @@ sqlSafef(query, sizeof(query),
     "select count(*) from edwFile e,edwValidFile v where e.id = v.fileId and e.submitId=%u",
     submit->id);
 return sqlQuickNum(conn, query);
+}
+
+int edwSubmitCountErrors(struct edwSubmit *submit, struct sqlConnection *conn)
+/* Count number of errors with submitted files */
+{
+char query[256];
+sqlSafef(query, sizeof(query), 
+    "select count(*) from edwFile where submitId=%u and errorMessage != '' and errorMessage is not null",
+    submit->id);
+return sqlQuickNum(conn, query);
+}
+
+boolean edwSubmitIsValidated(struct edwSubmit *submit, struct sqlConnection *conn)
+/* Return TRUE if validation has run.  This does not mean that they all passed validation.
+ * It just means the validator has run and has made a decision on each file in the submission. */
+{
+/* Is this off by one because of the validated.txt being in the submission but never validated? */
+return edwSubmitCountErrors(submit,conn) + edwSubmitCountNewValid(submit, conn) == submit->newFiles;
 }
 
 void edwAddSubmitJob(struct sqlConnection *conn, char *userEmail, char *url, boolean update)
@@ -867,18 +954,32 @@ printf("Content-Type:text/html\r\n");
 printf("\r\n\r\n");
 puts("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" "
 	      "\"http://www.w3.org/TR/html4/loose.dtd\">");
-printf("<HTML><HEAD><TITLE>%s</TITLE>\n", title);
+printf("<HTML><HEAD><TITLE>%s</TITLE>\n", "ENCODE Data Warehouse");
 puts("<meta http-equiv='X-UA-Compatible' content='IE=Edge'>");
+
+// Use Stanford ENCODE3 CSS for common look
+puts("<link rel='stylesheet' href='/style/encode3.css' type='text/css'>");
+puts("<link rel='stylesheet' href='/style/encode3Ucsc.css' type='text/css'>");
+// external link icon (box with arrow) is from FontAwesome (fa-external-link)
+puts("<link href='//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css' rel='stylesheet'>");
+
 puts("<script type='text/javascript' SRC='/js/jquery.js'></script>");
 puts("<script type='text/javascript' SRC='/js/jquery.cookie.js'></script>");
 puts("<script type='text/javascript' src='https://login.persona.org/include.js'></script>");
 puts("<script type='text/javascript' src='/js/edwPersona.js'></script>");
-puts("</HEAD><BODY>");
+puts("</HEAD>");
+
+/* layout with navigation bar */
+puts("<BODY>\n");
+
+edwWebNavBarStart();
 }
+
 
 void edwWebFooterWithPersona()
 /* Print out end tags and persona script stuff */
 {
+edwWebNavBarEnd();
 htmlEnd();
 }
 
@@ -981,59 +1082,141 @@ sqlDisconnect(&conn);
 return reg;
 }
 
-void edwFileResetTags(struct sqlConnection *conn, struct edwFile *ef, char *newTags)
+void edwValidFileUpdateDb(struct sqlConnection *conn, struct edwValidFile *el, long long id)
+/* Save edwValidFile as a row to the table specified by tableName, replacing existing record at 
+ * id. */
+{
+struct dyString *dy = newDyString(512);
+sqlDyStringAppend(dy, "update edwValidFile set ");
+// omit id and licensePlate fields - one autoupdates and the other depends on this
+// also omit fileId which also really can't change.
+dyStringPrintf(dy, " format='%s',", el->format);
+dyStringPrintf(dy, " outputType='%s',", el->outputType);
+dyStringPrintf(dy, " experiment='%s',", el->experiment);
+dyStringPrintf(dy, " replicate='%s',", el->replicate);
+dyStringPrintf(dy, " validKey='%s',", el->validKey);
+dyStringPrintf(dy, " enrichedIn='%s',", el->enrichedIn);
+dyStringPrintf(dy, " ucscDb='%s',", el->ucscDb);
+dyStringPrintf(dy, " itemCount=%lld,", (long long)el->itemCount);
+dyStringPrintf(dy, " basesInItems=%lld,", (long long)el->basesInItems);
+dyStringPrintf(dy, " sampleCount=%lld,", (long long)el->sampleCount);
+dyStringPrintf(dy, " basesInSample=%lld,", (long long)el->basesInSample);
+dyStringPrintf(dy, " sampleBed='%s',", el->sampleBed);
+dyStringPrintf(dy, " mapRatio=%g,", el->mapRatio);
+dyStringPrintf(dy, " sampleCoverage=%g,", el->sampleCoverage);
+dyStringPrintf(dy, " depth=%g,", el->depth);
+dyStringPrintf(dy, " singleQaStatus=0,");
+dyStringPrintf(dy, " replicateQaStatus=0,");
+dyStringPrintf(dy, " technicalReplicate='%s',", el->technicalReplicate);
+dyStringPrintf(dy, " pairedEnd='%s',", el->pairedEnd);
+dyStringPrintf(dy, " qaVersion='%d',", el->qaVersion);
+dyStringPrintf(dy, " uniqueMapRatio=%g", el->uniqueMapRatio);
+#if (EDWVALIDFILE_NUM_COLS != 24)
+   #error "Please update this routine with new column"
+#endif
+dyStringPrintf(dy, " where id=%lld\n", (long long)id);
+sqlUpdate(conn, dy->string);
+freeDyString(&dy);
+}
+
+static char *findTagOrEmpty(struct cgiParsedVars *tags, char *key)
+/* Find key in tags.  If it is not there, or empty, or 'n/a' valued return empty string
+ * otherwise return val */
+{
+char *val = hashFindVal(tags->hash, key);
+if (val == NULL || sameString(val, "n/a"))
+   return "";
+else
+   return val;
+}
+
+void edwValidFileFieldsFromTags(struct edwValidFile *vf, struct cgiParsedVars *tags)
+/* Fill in many of vf's fields from tags. */
+{
+vf->format = cloneString(hashFindVal(tags->hash, "format"));
+vf->outputType = cloneString(findTagOrEmpty(tags, "output_type"));
+vf->experiment = cloneString(findTagOrEmpty(tags, "experiment"));
+vf->replicate = cloneString(findTagOrEmpty(tags, "replicate"));
+vf->validKey = cloneString(hashFindVal(tags->hash, "valid_key"));
+vf->enrichedIn = cloneString(findTagOrEmpty(tags, "enriched_in"));
+vf->ucscDb = cloneString(findTagOrEmpty(tags, "ucsc_db"));
+vf->technicalReplicate = cloneString(findTagOrEmpty(tags, "technical_replicate"));
+vf->pairedEnd = cloneString(findTagOrEmpty(tags, "paired_end"));
+#if (EDWVALIDFILE_NUM_COLS != 24)
+   #error "Please update this routine with new column"
+#endif
+}
+
+void edwFileResetTags(struct sqlConnection *conn, struct edwFile *ef, char *newTags, 
+    boolean revalidate)
 /* Reset tags on file, strip out old validation and QA,  schedule new validation and QA. */
 /* Remove existing QA records and rerun QA agent on given file.   */
 {
 long long fileId = ef->id;
 /* Update database to let people know format revalidation is in progress. */
 char query[4*1024];
-sqlSafef(query, sizeof(query), "update edwFile set errorMessage = '%s' where id=%lld",
-     "Revalidation in progress.", fileId); 
-sqlUpdate(conn, query);
 
 /* Update tags for file in edwFile table. */
 sqlSafef(query, sizeof(query), "update edwFile set tags='%s' where id=%lld", newTags, fileId);
 sqlUpdate(conn, query);
     
-/* Get rid of records referring to file in other validation and qa tables. */
-sqlSafef(query, sizeof(query), "delete from edwFastqFile where fileId=%lld", fileId);
-sqlUpdate(conn, query);
-sqlSafef(query, sizeof(query),
-    "delete from edwQaPairSampleOverlap where elderFileId=%lld or youngerFileId=%lld",
-    fileId, fileId);
-sqlUpdate(conn, query);
-sqlSafef(query, sizeof(query),
-    "delete from edwQaPairCorrelation where elderFileId=%lld or youngerFileId=%lld",
-    fileId, fileId);
-sqlUpdate(conn, query);
-sqlSafef(query, sizeof(query), "delete from edwQaEnrich where fileId=%lld", fileId);
-sqlUpdate(conn, query);
-sqlSafef(query, sizeof(query), "delete from edwQaContam where fileId=%lld", fileId);
-sqlUpdate(conn, query);
-sqlSafef(query, sizeof(query), "delete from edwQaRepeat where fileId=%lld", fileId);
-sqlUpdate(conn, query);
-sqlSafef(query, sizeof(query), 
-    "delete from edwQaPairedEndFastq where fileId1=%lld or fileId2=%lld",
-    fileId, fileId);
-sqlUpdate(conn, query);
+if (revalidate)
+    {
+    sqlSafef(query, sizeof(query), "update edwFile set errorMessage = '%s' where id=%lld",
+	 "Revalidation in progress.", fileId); 
+    sqlUpdate(conn, query);
 
-/* schedule validator */
-edwAddQaJob(conn, ef->id);
+    /* Get rid of records referring to file in other validation and qa tables. */
+    sqlSafef(query, sizeof(query), "delete from edwFastqFile where fileId=%lld", fileId);
+    sqlUpdate(conn, query);
+    sqlSafef(query, sizeof(query),
+	"delete from edwQaPairSampleOverlap where elderFileId=%lld or youngerFileId=%lld",
+	fileId, fileId);
+    sqlUpdate(conn, query);
+    sqlSafef(query, sizeof(query),
+	"delete from edwQaPairCorrelation where elderFileId=%lld or youngerFileId=%lld",
+	fileId, fileId);
+    sqlUpdate(conn, query);
+    sqlSafef(query, sizeof(query), "delete from edwQaEnrich where fileId=%lld", fileId);
+    sqlUpdate(conn, query);
+    sqlSafef(query, sizeof(query), "delete from edwQaContam where fileId=%lld", fileId);
+    sqlUpdate(conn, query);
+    sqlSafef(query, sizeof(query), "delete from edwQaRepeat where fileId=%lld", fileId);
+    sqlUpdate(conn, query);
+    sqlSafef(query, sizeof(query), 
+	"delete from edwQaPairedEndFastq where fileId1=%lld or fileId2=%lld",
+	fileId, fileId);
+    sqlUpdate(conn, query);
+
+    /* schedule validator */
+    edwAddQaJob(conn, ef->id);
+    }
+else
+    {
+    /* The revalidation case relies on edwMakeValidFile to update the edwValidFile table.
+     * Here we must do it ourselves. */
+    struct edwValidFile *vf = edwValidFileFromFileId(conn, ef->id);
+    struct cgiParsedVars *tags = cgiParsedVarsNew(newTags);
+    edwValidFileFieldsFromTags(vf, tags);
+    edwValidFileUpdateDb(conn, vf, vf->id);
+    cgiParsedVarsFree(&tags);
+    edwValidFileFree(&vf);
+    }
 }
 
 static void scanSam(char *samIn, FILE *f, struct genomeRangeTree *grt, long long *retHit, 
-    long long *retMiss,  long long *retTotalBasesInHits)
+    long long *retMiss,  long long *retTotalBasesInHits, long long *retUniqueHitCount)
 /* Scan through sam file doing several things:counting how many reads hit and how many 
  * miss target during mapping phase, copying those that hit to a little bed file, and 
  * also defining regions covered in a genomeRangeTree. */
 {
+#ifdef USE_BAM
 samfile_t *sf = samopen(samIn, "r", NULL);
 bam_header_t *bamHeader = sf->header;
 bam1_t one;
 ZeroVar(&one);
 int err;
-long long hit = 0, miss = 0, totalBasesInHits = 0;
+long long hit = 0, miss = 0, unique = 0, totalBasesInHits = 0;
 while ((err = samread(sf, &one)) >= 0)
     {
     int32_t tid = one.core.tid;
@@ -1043,6 +1226,8 @@ while ((err = samread(sf, &one)) >= 0)
         continue;
 	}
     ++hit;
+    if (one.core.qual > edwMinMapQual)
+        ++unique;
     char *chrom = bamHeader->target_name[tid];
     // Approximate here... can do better if parse cigar.
     int start = one.core.pos;
@@ -1050,12 +1235,7 @@ while ((err = samread(sf, &one)) >= 0)
     int end = start + size;	
     totalBasesInHits += size;
     boolean isRc = (one.core.flag & BAM_FREVERSE);
-    char strand = '+';
-    if (isRc)
-	{
-	strand = '-';
-	reverseIntRange(&start, &end, bamHeader->target_len[tid]);
-	}
+    char strand = (isRc ? '-' : '+');
     if (start < 0) start=0;
     if (f != NULL)
 	fprintf(f, "%s\t%d\t%d\t.\t0\t%c\n", chrom, start, end, strand);
@@ -1067,6 +1247,10 @@ samclose(sf);
 *retHit = hit;
 *retMiss = miss;
 *retTotalBasesInHits = totalBasesInHits;
+*retUniqueHitCount = unique;
+#else // no USE_BAM
+warn(COMPILE_WITH_SAMTOOLS, "scanSam");
+#endif//ndef USE_BAM
 }
 
 void edwReserveTempFile(char *path)
@@ -1079,18 +1263,31 @@ if (fd == -1)
 mustCloseFd(&fd);
 }
 
+void edwBwaIndexPath(struct edwAssembly *assembly, char indexPath[PATH_LEN])
+/* Fill in path to BWA index. */
+{
+safef(indexPath, PATH_LEN, "%s%s/bwaData/%s.fa", 
+    edwValDataDir, assembly->ucscDb, assembly->ucscDb);
+}
+
+void edwAsPath(char *format, char path[PATH_LEN])
+/* Convert something like "narrowPeak" in format to fill path involving
+ * encValDir/as/narrowPeak.as */
+{
+safef(path, PATH_LEN, "%sas/%s.as", edwValDataDir, format);
+}
 
 void edwAlignFastqMakeBed(struct edwFile *ef, struct edwAssembly *assembly,
     char *fastqPath, struct edwValidFile *vf, FILE *bedF,
-    double *retMapRatio,  double *retDepth,  double *retSampleCoverage)
+    double *retMapRatio,  double *retDepth,  double *retSampleCoverage, 
+    double *retUniqueMapRatio)
 /* Take a sample fastq and run bwa on it, and then convert that file to a bed. 
  * bedF and all the ret parameters can be NULL. */
 {
 /* Hmm, tried doing this with Mark's pipeline code, but somehow it would be flaky the
  * second time it was run in same app.  Resorting therefore to temp files. */
 char genoFile[PATH_LEN];
-safef(genoFile, sizeof(genoFile), "%s%s/bwaData/%s.fa", 
-    edwValDataDir, assembly->ucscDb, assembly->ucscDb);
+edwBwaIndexPath(assembly, genoFile);
 
 char cmd[3*PATH_LEN];
 char *saiName = cloneString(rTempName(edwTempDir(), "edwSample1", ".sai"));
@@ -1105,8 +1302,8 @@ remove(saiName);
 /* Scan sam file to calculate vf->mapRatio, vf->sampleCoverage and vf->depth. 
  * and also to produce little bed file for enrichment step. */
 struct genomeRangeTree *grt = genomeRangeTreeNew();
-long long hitCount=0, missCount=0, totalBasesInHits=0;
-scanSam(samName, bedF, grt, &hitCount, &missCount, &totalBasesInHits);
+long long hitCount=0, missCount=0, uniqueHitCount, totalBasesInHits=0;
+scanSam(samName, bedF, grt, &hitCount, &missCount, &totalBasesInHits, &uniqueHitCount);
 verbose(1, "hitCount=%lld, missCount=%lld, totalBasesInHits=%lld, grt=%p\n", 
     hitCount, missCount, totalBasesInHits, grt);
 if (retMapRatio)
@@ -1117,6 +1314,8 @@ if (retDepth)
 long long basesHitBySample = genomeRangeTreeSumRanges(grt);
 if (retSampleCoverage)
     *retSampleCoverage = (double)basesHitBySample/assembly->baseCount;
+if (retUniqueMapRatio)
+    *retUniqueMapRatio = (double)uniqueHitCount/(hitCount+missCount);
 genomeRangeTreeFree(&grt);
 remove(samName);
 }
@@ -1169,7 +1368,7 @@ if (fqf == NULL)
     edwReserveTempFile(sampleFile);
     char command[3*PATH_LEN];
     safef(command, sizeof(command), "fastqStatsAndSubsample -sampleSize=%d -smallOk %s %s %s",
-	250000, path, statsFile, sampleFile);
+	edwSampleTargetSize, path, statsFile, sampleFile);
     mustSystem(command);
     safef(command, sizeof(command), "gzip %s", sampleFile);
     mustSystem(command);
@@ -1184,4 +1383,311 @@ if (fqf == NULL)
 edwFastqFileFree(&fqf);
 }
 
+struct edwQaWigSpot *edwMakeWigSpot(struct sqlConnection *conn, long long wigId, long long spotId)
+/* Create a new edwQaWigSpot record in database based on comparing wig file to spot file
+ * (specified by id's in edwFile table). */
+{
+/* Get valid files from fileIds and check format */
+struct edwValidFile *wigVf = edwValidFileFromFileId(conn, wigId);
+if (!sameString(wigVf->format, "bigWig"))
+    errAbort("%lld is not a bigWig file, is %s instead", wigId, wigVf->format);
+struct edwValidFile *spotVf = edwValidFileFromFileId(conn, spotId);
+if (!sameString(spotVf->format, "narrowPeak") && !sameString(spotVf->format, "broadPeak") &&
+    !sameString(spotVf->format, "bigBed"))
+    errAbort("%lld is not a recognized peak type format, is %s", spotId, spotVf->format);
+
+/* Remove any old record for files. */
+char query[256];
+sqlSafef(query, sizeof(query), 
+    "delete from edwQaWigSpot where wigId=%lld and spotId=%lld", wigId, spotId);
+sqlUpdate(conn, query);
+
+/* Figure out file names */
+char *wigPath = edwPathForFileId(conn, wigId);
+char *spotPath = edwPathForFileId(conn, spotId);
+char statsFile[PATH_LEN];
+safef(statsFile, PATH_LEN, "%sedwQaWigSpotXXXXXX", edwTempDir());
+edwReserveTempFile(statsFile);
+char peakFile[PATH_LEN];
+safef(peakFile, PATH_LEN, "%sedwQaWigSpotXXXXXX", edwTempDir());
+edwReserveTempFile(peakFile);
+
+/* Convert narrowPeak input into a temporary bed4 file */
+char command[3*PATH_LEN];
+safef(command, sizeof(command), "bigBedToBed %s stdout | cut -f 1-4 > %s", spotPath, peakFile);
+mustSystem(command);
+
+/* Call on bigWigAverageOverBed on peaks */
+safef(command, sizeof(command), 
+    "bigWigAverageOverBed %s %s /dev/null -stats=%s", wigPath, peakFile, statsFile);
+mustSystem(command);
+remove(peakFile);
+
+/* Parse out ra file,  save it to database, and remove ra file. */
+struct edwQaWigSpot *spot = edwQaWigSpotOneFromRa(statsFile);
+spot->wigId = wigId;
+spot->spotId = spotId;
+edwQaWigSpotSaveToDb(conn, spot, "edwQaWigSpot", 1024);
+spot->id = sqlLastAutoId(conn);
+
+/* Clean up and go home. */
+edwQaWigSpotFree(&spot);
+edwValidFileFree(&wigVf);
+edwValidFileFree(&spotVf);
+freez(&wigPath);
+freez(&spotPath);
+return spot;
+}
+
+struct edwQaWigSpot *edwQaWigSpotFor(struct sqlConnection *conn, 
+    long long wigFileId, long long spotFileId) 
+/* Return wigSpot relationship if any we have in database for these two files. */
+{
+char query[256];
+sqlSafef(query, sizeof(query), 
+    "select * from edwQaWigSpot where wigId=%lld and spotId=%lld", wigFileId, spotFileId);
+return edwQaWigSpotLoadByQuery(conn, query);
+}
+
+
+
+
+struct edwBamFile *edwBamFileFromFileId(struct sqlConnection *conn, long long fileId)
+/* Get edwBamFile with given fileId or NULL if none such */
+{
+char query[256];
+sqlSafef(query, sizeof(query), "select * from edwBamFile where fileId=%lld", fileId);
+return edwBamFileLoadByQuery(conn, query);
+}
+
+struct edwBamFile * edwMakeBamStatsAndSample(struct sqlConnection *conn, long long fileId, 
+    char sampleBed[PATH_LEN])
+/* Run edwBamStats and put results into edwBamFile table, and also a sample bed.
+ * The sampleBed will be filled in by this routine. */
+{
+/* Remove any old record for file. */
+char query[256];
+sqlSafef(query, sizeof(query), "delete from edwBamFile where fileId=%lld", fileId);
+sqlUpdate(conn, query);
+
+/* Figure out file names */
+char *path = edwPathForFileId(conn, fileId);
+char statsFile[PATH_LEN];
+safef(statsFile, PATH_LEN, "%sedwBamStatsXXXXXX", edwTempDir());
+edwReserveTempFile(statsFile);
+char dayTempDir[PATH_LEN];
+safef(sampleBed, PATH_LEN, "%sedwBamSampleXXXXXX", edwTempDirForToday(dayTempDir));
+edwReserveTempFile(sampleBed);
+
+/* Make system call to make ra and bed, and then another system call to zip bed.*/
+char command[3*PATH_LEN];
+safef(command, sizeof(command), "edwBamStats -sampleBed=%s -sampleBedSize=%d %s %s",
+    sampleBed, edwSampleTargetSize, path, statsFile);
+mustSystem(command);
+safef(command, sizeof(command), "gzip %s", sampleBed);
+mustSystem(command);
+strcat(sampleBed, ".gz");
+
+/* Parse out ra file,  save it to database, and remove ra file. */
+struct edwBamFile *ebf = edwBamFileOneFromRa(statsFile);
+ebf->fileId = fileId;
+edwBamFileSaveToDb(conn, ebf, "edwBamFile", 1024);
+remove(statsFile);
+
+/* Clean up and go home. */
+freez(&path);
+return ebf;
+}
+
+
+char *edwOppositePairedEndString(char *end)
+/* Return "1" for "2" and vice versa */
+{
+if (sameString(end, "1"))
+    return "2";
+else if (sameString(end, "2"))
+    return "1";
+else
+    {
+    errAbort("Expecting 1 or 2, got %s in oppositeEnd", end);
+    return NULL;
+    }
+}
+
+struct edwValidFile *edwOppositePairedEnd(struct sqlConnection *conn, struct edwValidFile *vf)
+/* Given one file of a paired end set of fastqs, find the file with opposite ends. */
+{
+char *otherEnd = edwOppositePairedEndString(vf->pairedEnd);
+char query[1024];
+sqlSafef(query, sizeof(query), 
+    "select edwValidFile.* from edwValidFile join edwFile on edwValidFile.fileId=edwFile.id"
+    " where experiment='%s' and outputType='%s' and replicate='%s' "
+    " and technicalReplicate='%s' and pairedEnd='%s' and itemCount=%lld and deprecated=''"
+    , vf->experiment, vf->outputType, vf->replicate, vf->technicalReplicate, otherEnd
+    , vf->itemCount);
+struct edwValidFile *otherVf = edwValidFileLoadByQuery(conn, query);
+if (otherVf == NULL)
+    return NULL;
+if (otherVf->next != NULL)
+    errAbort("Multiple results from pairedEnd query %s", query);
+return otherVf;
+}
+
+struct edwQaPairedEndFastq *edwQaPairedEndFastqFromVfs(struct sqlConnection *conn,
+    struct edwValidFile *vfA, struct edwValidFile *vfB,
+    struct edwValidFile **retVf1,  struct edwValidFile **retVf2)
+/* Return pair record if any for the two fastq files. */
+{
+/* Sort the two ends. */
+struct edwValidFile *vf1 = NULL, *vf2 = NULL;
+if (sameString(vfA->pairedEnd, "1"))
+    {
+    vf1 = vfA;
+    vf2 = vfB;
+    }
+else
+    {
+    vf1 = vfB;
+    vf2 = vfA;
+    }
+if (retVf1 != NULL)
+   *retVf1 = vf1;
+if (retVf2 != NULL)
+   *retVf2 = vf2;
+
+/* See if we already have a record for these two. */
+/* Return record for these two. */
+char query[1024];
+sqlSafef(query, sizeof(query), 
+    "select * from edwQaPairedEndFastq where fileId1=%u and fileId2=%u",
+    vf1->fileId, vf2->fileId);
+return edwQaPairedEndFastqLoadByQuery(conn, query);
+}
+
+FILE *edwPopen(char *command, char *mode)
+/* do popen or die trying */
+{
+/* Because of bugs with popen(...,"r") and programs that use stdin otherwise
+ * it's probably better to use Mark's pipeline library,  but it is ever so
+ * much harder to use... */
+FILE *f = popen(command,  mode);
+if (f == NULL)
+    errnoAbort("Can't popen(%s, %s)", command, mode);
+return f;
+}
+
+boolean edwOneLineSystemAttempt(char *command, char *line, int maxLineSize)
+/* Execute system command and return one line result from it in line */
+{
+FILE *f = popen(command, "r");
+boolean ok = FALSE;
+if (f != NULL)
+    {
+    char *result  = fgets(line, maxLineSize, f);
+    if (result != NULL)
+	ok = TRUE;
+    pclose(f);
+    }
+else
+    {
+    errnoWarn("failed popen %s", command);
+    }
+return ok;
+}
+
+void edwOneLineSystemResult(char *command, char *line, int maxLineSize)
+/* Execute system command and return one line result from it in line */
+{
+if (!edwOneLineSystemAttempt(command, line, maxLineSize) )
+    errAbort("Can't get line from %s", command);
+}
+
+void edwMd5File(char *fileName, char md5Hex[33])
+/* call md5sum utility to calculate md5 for file and put result in hex format md5Hex 
+ * This ends up being about 30% faster than library routine md5HexForFile,
+ * however since there's popen() weird interactions with  stdin involved
+ * it's not suitable for a general purpose library.  Environment inside edw
+ * is controlled enough it should be ok. */
+{
+char command[PATH_LEN + 16];
+safef(command, sizeof(command), "md5sum %s", fileName);
+char line[2*PATH_LEN];
+edwOneLineSystemResult(command, line, sizeof(line));
+memcpy(md5Hex, line, 32);
+md5Hex[32] = 0;
+}
+
+
+void edwPokeFifo(char *fifoName)
+/* Send '\n' to fifo to wake up associated daemon */
+{
+/* Sadly we loop through places it might be since it varies. It has to live somewhere
+ * that web CGIs can poke is the problem. */
+char *places[] = {"/data/www/userdata/", "/usr/local/apache/userdata/"};
+int i;
+for (i=0; i<ArraySize(places); ++i)
+    {
+    char path[PATH_LEN];
+    safef(path, sizeof(path), "%s%s", places[i], fifoName);
+    if (fileExists(path))
+        {
+	char *message = "\n";
+	writeGulp(path, message, strlen(message));
+	break;
+	}
+    }
+}
+
+/***/
+/* Shared functions for EDW web CGI's.
+   Mostly wrappers for javascript tweaks */
+
+void edwWebAutoRefresh(int msec)
+/* Refresh page after msec.  Use 0 to cancel autorefresh */
+{
+if (msec > 0)
+    {
+    // set timeout to refresh page (saving/restoring scroll position via cookie)
+    printf("<script type='text/javascript'>var edwRefresh = setTimeout(function() { $.cookie('edwWeb.scrollTop', $(window).scrollTop()); $('form').submit(); }, %d);</script>", msec);
+    puts("<script type='text/javascript'>$(document).ready(function() {$(document).scrollTop($.cookie('edwWeb.scrollTop'))});</script>");
+
+    // disable autorefresh when user is changing page settings
+    puts("<script type='text/javascript'>$('form').click(function() {clearTimeout(edwRefresh); $.cookie('edwWeb.scrollTop', null);});</script>");
+    }
+else if (msec == 0)
+    puts("clearTimeout(edwRefresh);</script>");
+
+// Negative msec ignored
+}
+
+/***/
+/* Navigation bar */
+
+void edwWebNavBarStart()
+/* Layout navigation bar */
+{
+puts("<div id='layout'>");
+puts("<div id='navbar' class='navbar navbar-fixed-top navbar-inverse'>");
+webIncludeFile("/inc/edwNavBar.html");
+puts("</div>");
+puts("<div id='content' class='container'><div>");
+}
+
+void edwWebNavBarEnd()
+/* Close layout after navigation bar */
+{
+puts("</div></div></div>");
+}
+
+void edwWebBrowseMenuItem(boolean on)
+/* Toggle visibility of 'Browse submissions' link on navigation menu */
+{
+printf("<script type='text/javascript'>$('#edw-browse').%s();</script>", on ? "show" : "hide");
+}
+
+void edwWebSubmitMenuItem(boolean on)
+/* Toggle visibility of 'Submit data' link on navigation menu */
+{
+printf("<script type='text/javascript'>$('#edw-submit').%s();</script>", on ? "show" : "hide");
+}
 

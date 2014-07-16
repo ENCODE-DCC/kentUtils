@@ -10,9 +10,9 @@ export ECHO="/bin/echo -e"
 if [ $# -ne 4 ]; then
     ${ECHO} "usage: update.sh <name> <db> <Db> <Id>" 1>&2
     ${ECHO} "where <name> is one of: human mouse zebrafish" 1>&2
-    ${ECHO} "<db> is one of: hg19 mm9 mm10 danRer7" 1>&2
-    ${ECHO} "<Db> is one of: Hg19 Mm9 Mm10 DanRer7" 1>&2
-    ${ECHO} "<Id> is one of: GRCH37 MGSCv37 GRCm38 Zv9" 1>&2
+    ${ECHO} "<db> is one of: hg19 hg38 mm9 mm10 danRer7" 1>&2
+    ${ECHO} "<Db> is one of: Hg19 Hg38 Mm9 Mm10 DanRer7" 1>&2
+    ${ECHO} "<Id> is one of: GRCh37 GRCh38 MGSCv37 GRCm38 Zv9" 1>&2
     exit 255
 fi
 

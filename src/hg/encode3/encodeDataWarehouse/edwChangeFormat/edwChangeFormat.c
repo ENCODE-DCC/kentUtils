@@ -1,5 +1,8 @@
 /* edwChangeFormat - Change format and force a revalidation for a file.. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -39,7 +42,7 @@ void changeFormat(struct sqlConnection *conn, struct edwValidFile *vf, char *for
 {
 struct edwFile *ef = edwFileFromId(conn, vf->fileId);
 char *newTags = cgiStringNewValForVar(ef->tags, tagToChange, format);
-edwFileResetTags(conn, ef, newTags);
+edwFileResetTags(conn, ef, newTags, TRUE);
 edwFileFree(&ef);
 }
 

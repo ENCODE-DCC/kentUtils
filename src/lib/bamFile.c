@@ -1,5 +1,8 @@
 /* bamFile -- interface to binary alignment format files using Heng Li's samtools lib. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "portable.h"
 #include "bamFile.h"
@@ -7,7 +10,24 @@
 #include "htmshell.h"
 #include "udc.h"
 
-#ifndef KNETFILE_HOOKS
+#ifdef KNETFILE_HOOKS
+// If KNETFILE_HOOKS is used (as recommended!), then we can simply call bam_index_load
+// without worrying about the samtools lib creating local cache files in cgi-bin:
+
+static bam_index_t *bamOpenIdx(char *fileOrUrl)
+/* If fileOrUrl has a valid accompanying .bai file, parse and return the index;
+ * otherwise return NULL. */
+{
+bam_index_t *idx = bam_index_load(fileOrUrl);
+return idx;
+}
+
+#else// no KNETFILE_HOOKS
+// Oh well.  The unmodified samtools lib downloads .bai files into the current
+// working directory, which is cgi-bin -- not good.  So we need to temporarily
+// change to a trash directory, let samtools download there, then pop back to
+// cgi-bin.
+
 static char *getSamDir()
 /* Return the name of a trash dir for samtools to run in (it creates files in current dir)
  * and make sure the directory exists. */
@@ -23,46 +43,64 @@ if (samDir == NULL)
     }
 return samDir;
 }
+
+static bam_index_t *bamOpenIdx(char *fileOrUrl)
+/* If fileOrUrl has a valid accompanying .bai file, parse and return the index;
+ * otherwise return NULL. */
+{
+// When file is an URL, this caches the index file in addition to validating:
+// Since samtools's url-handling code saves the .bai file to the current directory,
+// chdir to a trash directory before calling bam_index_load, then chdir back.
+char *runDir = getCurrentDir();
+char *samDir = getSamDir();
+boolean usingUrl = (strstr(fileOrUrl, "tp://") || strstr(fileOrUrl, "https://"));
+if (usingUrl)
+    setCurrentDir(samDir);
+bam_index_t *idx = bam_index_load(fileOrUrl);
+if (usingUrl)
+    setCurrentDir(runDir);
+return idx;
+}
+
 #endif//ndef KNETFILE_HOOKS
 
+static void bamCloseIdx(bam_index_t **pIdx)
+/* Free unless already NULL. */
+{
+if (pIdx != NULL && *pIdx != NULL)
+    {
+    free(*pIdx); // Not freeMem, freez etc -- sam just uses malloc/calloc.
+    *pIdx = NULL;
+    }
+}
+
 boolean bamFileExists(char *fileOrUrl)
-/* Return TRUE if we can successfully open the bam file and its index file. */
+/* Return TRUE if we can successfully open the bam file and its index file.
+ * NOTE: this doesn't give enough diagnostics */
 {
 char *bamFileName = fileOrUrl;
 samfile_t *fh = samopen(bamFileName, "rb", NULL);
-boolean usingUrl = TRUE; 
-usingUrl = (strstr(fileOrUrl, "tp://") || strstr(fileOrUrl, "https://"));
-if (fh != NULL)
+// Check both fh and fh->header; non-NULL fh can have NULL header if header doesn't parse!
+if (fh != NULL && fh->header != NULL)
     {
-#ifndef KNETFILE_HOOKS
-    // When file is an URL, this caches the index file in addition to validating:
-    // Since samtools's url-handling code saves the .bai file to the current directory,
-    // chdir to a trash directory before calling bam_index_load, then chdir back.
-    char *runDir = getCurrentDir();
-    char *samDir = getSamDir();
-    if (usingUrl)
-	setCurrentDir(samDir);
-#endif//ndef KNETFILE_HOOKS
-    bam_index_t *idx = bam_index_load(bamFileName);
-#ifndef KNETFILE_HOOKS
-    if (usingUrl)
-	setCurrentDir(runDir);
-#endif//ndef KNETFILE_HOOKS
+    bam_index_t *idx = bamOpenIdx(bamFileName);
     samclose(fh);
     if (idx == NULL)
 	{
 	warn("bamFileExists: failed to read index corresponding to %s", bamFileName);
 	return FALSE;
 	}
-    free(idx); // Not freeMem, freez etc -- sam just uses malloc/calloc.
+    bamCloseIdx(&idx);
+    bamClose(&fh);
     return TRUE;
     }
 return FALSE;
 }
 
 samfile_t *bamOpen(char *fileOrUrl, char **retBamFileName)
-/* Return an open bam file, dealing with FUSE caching if need be. 
- * Return parameter if NON-null will return the file name after FUSing */
+/* Return an open bam file or errAbort (should be named bamMustOpen).
+ * Return parameter if NON-null will return the file name (vestigial; long ago
+ * there was a plan to use udcFuse filenames instead of URLs) */
 {
 char *bamFileName = fileOrUrl;
 if (retBamFileName != NULL)
@@ -75,29 +113,61 @@ bam_verbose = 1;
 #endif
 
 samfile_t *fh = samopen(bamFileName, "rb", NULL);
-if (fh == NULL)
+// Check both fh and fh->header; non-NULL fh can have NULL header if header doesn't parse!
+if (fh == NULL || fh->header == NULL)
     {
     boolean usingUrl = (strstr(fileOrUrl, "tp://") || strstr(fileOrUrl, "https://"));
     struct dyString *urlWarning = dyStringNew(0);
-    if (usingUrl)
+    if (usingUrl && fh == NULL)
 	{
 	dyStringAppend(urlWarning,
 		       ". If you are able to access the URL with your web browser, "
 		       "please try reloading this page.");
 	}
+    else if (fh != NULL && fh->header == NULL)
+	dyStringAppend(urlWarning, ": parser error while reading the file header.");
     errAbort("Failed to open %s%s", fileOrUrl, urlWarning->string);
     }
 return fh;
 }
 
+samfile_t *bamMustOpenLocal(char *fileName, char *mode, void *extraHeader)
+/* Open up sam or bam file or die trying.  The mode parameter is 
+ *    "r" - open SAM to read
+ *    "rb" - open BAM to read
+ *    "w" - open SAM to write
+ *    "wb" - open BAM to write
+ * The extraHeader is generally NULL in the read case, and the write case
+ * contains a pointer to a bam_header_t with information about the header.
+ * The implementation is just a wrapper around samopen from the samtools library
+ * that aborts with error message if there's a problem with the open. */
+{
+samfile_t *sf = samopen(fileName, mode, extraHeader);
+if (sf == NULL)
+    errnoAbort("Couldn't open %s.\n", fileName);
+return sf;
+}
+
 void bamClose(samfile_t **pSamFile)
-/* Close down a samefile_t */
+/* Close down a samfile_t */
 {
 if (pSamFile != NULL)
     {
     samclose(*pSamFile);
     *pSamFile = NULL;
     }
+}
+
+void bamFileAndIndexMustExist(char *fileOrUrl)
+/* Open both a bam file and its accompanying index or errAbort; this is what it
+ * takes for diagnostic info to propagate up through errCatches in calling code. */
+{
+samfile_t *bamF = bamOpen(fileOrUrl, NULL);
+bam_index_t *idx = bamOpenIdx(fileOrUrl);
+if (idx == NULL)
+    errAbort("failed to read index file (.bai) corresponding to %s", fileOrUrl);
+bamCloseIdx(&idx);
+bamClose(&bamF);
 }
 
 void bamFetchAlreadyOpen(samfile_t *samfile, bam_index_t *idx, char *bamFileName, 
@@ -129,29 +199,15 @@ void bamFetch(char *fileOrUrl, char *position, bam_fetch_f callbackFunc, void *c
 {
 char *bamFileName = NULL;
 samfile_t *fh = bamOpen(fileOrUrl, &bamFileName);
-boolean usingUrl = TRUE;
-usingUrl = (strstr(fileOrUrl, "tp://") || strstr(fileOrUrl, "https://"));
 if (pSamFile != NULL)
     *pSamFile = fh;
-#ifndef KNETFILE_HOOKS
-// Since samtools' url-handling code saves the .bai file to the current directory,
-// chdir to a trash directory before calling bam_index_load, then chdir back.
-char *runDir = getCurrentDir();
-char *samDir = getSamDir();
-if (usingUrl)
-    setCurrentDir(samDir);
-#endif//ndef KNETFILE_HOOKS
-bam_index_t *idx = bam_index_load(bamFileName);
-#ifndef KNETFILE_HOOKS
-if (usingUrl)
-    setCurrentDir(runDir);
-#endif//ndef KNETFILE_HOOKS
+bam_index_t *idx = bamOpenIdx(bamFileName);
 if (idx == NULL)
     warn("bam_index_load(%s) failed.", bamFileName);
 else
     {
     bamFetchAlreadyOpen(fh, idx, bamFileName, position, callbackFunc, callbackData);
-    free(idx); // Not freeMem, freez etc -- sam just uses malloc/calloc.
+    bamCloseIdx(&idx);
     }
 bamClose(&fh);
 }
@@ -567,10 +623,32 @@ warn(COMPILE_WITH_SAMTOOLS, "bamFileExists");
 return FALSE;
 }
 
+void bamFileAndIndexMustExist(char *fileOrUrl)
+/* Open both a bam file and its accompanying index or errAbort; this is what it
+ * takes for diagnostic info to propagate up through errCatches in calling code. */
+{
+errAbort(COMPILE_WITH_SAMTOOLS, "bamFileAndIndexMustExist");
+}
+
 samfile_t *bamOpen(char *fileOrUrl, char **retBamFileName)
 /* Return an open bam file */
 {
-warn(COMPILE_WITH_SAMTOOLS, "bamOpenUdc");
+warn(COMPILE_WITH_SAMTOOLS, "bamOpen");
+return FALSE;
+}
+
+samfile_t *bamMustOpenLocal(char *fileName, char *mode, void *extraHeader)
+/* Open up sam or bam file or die trying.  The mode parameter is 
+ *    "r" - open SAM to read
+ *    "rb" - open BAM to read
+ *    "w" - open SAM to write
+ *    "wb" - open BAM to write
+ * The extraHeader is generally NULL in the read case, and the write case
+ * contains a pointer to a bam_header_t with information about the header.
+ * The implementation is just a wrapper around samopen from the samtools library
+ * that aborts with error message if there's a problem with the open. */
+{
+warn(COMPILE_WITH_SAMTOOLS, "bamMustOpenLocal");
 return FALSE;
 }
 

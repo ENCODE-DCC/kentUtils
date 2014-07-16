@@ -1,3 +1,6 @@
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 /* hgFlyBase - Parse FlyBase genes.txt file and turn it into a couple of 
  * tables.  See http://flybase.org/.data/docs/refman/refman-B.html for a 
  * description of these files.  We don't try too hard to extract and 
@@ -152,7 +155,7 @@ while ((c = *s++) != 0)
 	if (e != NULL)
 	    {
 	    int size = e - s;
-	    if (size < 8);
+	    if (size < 8)
 	        {
 		int i;
 		char tag[8];

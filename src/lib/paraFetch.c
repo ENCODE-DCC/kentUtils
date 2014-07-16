@@ -1,9 +1,12 @@
 /* paraFetch - fetch things from remote URLs in parallel. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include <utime.h>
 #include "common.h"
 #include "internet.h"
-#include "errabort.h"
+#include "errAbort.h"
 #include "hash.h"
 #include "linefile.h"
 #include "net.h"
@@ -369,7 +372,7 @@ if (progress)
 int out = open(outPath, O_CREAT|O_WRONLY, 0664);
 if (out < 0)
     {
-    warn("Unable to open %s for write while downloading %s, can't proceed, sorry", url, outPath);
+    warn("Unable to open %s for write while downloading %s, can't proceed, sorry", outPath, url);
     return FALSE;
     }
 

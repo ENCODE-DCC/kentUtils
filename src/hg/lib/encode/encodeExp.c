@@ -2,6 +2,9 @@
  * generated encodeExp.h and encodeExp.sql.  This module links the database and
  * the RAM representation of objects. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "linefile.h"
 #include "dystring.h"
@@ -838,6 +841,12 @@ void encodeExpRemoveAccession(struct sqlConnection *conn, char *tableName, int i
 */
 {
 encodeExpAccession(conn, tableName, id, FALSE);
+}
+
+boolean encodeExpIsAccessioned(struct encodeExp *exp)
+/* Determine if experiment has an accession (not unaccessioned or deaccessioned) */
+{
+return encodeExpGetAccession(exp) != NULL;
 }
 
 void encodeExpRemove(struct sqlConnection *conn, char *tableName, struct encodeExp *exp, char *why)

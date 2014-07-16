@@ -1,4 +1,7 @@
 /* Data structure for dealing with custom tracks in the browser. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #ifndef CUSTOMTRACK_H
 #define CUSTOMTRACK_H
 
@@ -153,6 +156,14 @@ struct trackDb *customTrackTdbDefault();
 
 boolean isCustomTrack(char *track);
 /* determine if track name refers to a custom track */
+
+char* customTrackTypeFromBigFile(char *fileName);
+/* return most likely type for a file name or NULL, has
+ * to be freed */
+
+boolean customTrackIsBigData(char *fileName);
+/* return TRUE if fileName has a suffix that we
+ * recognize as a bigDataUrl track type. */
 
 boolean customTrackIsCompressed(char *fileName);
 /* test for file suffix indicating compression */

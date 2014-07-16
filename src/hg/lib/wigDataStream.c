@@ -1,6 +1,9 @@
 /*	wigDataStream - an object to access wiggle data values from
  *	either a DB access or from a .wig text file (==custom track)
  */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "memalloc.h"
 #include "wiggle.h"
@@ -8,6 +11,7 @@
 #include "hgColors.h"
 #include "obscure.h"
 #include "customTrack.h"
+#include "udc.h"
 
 /*	size of memory to work with during wiggle data fetch operations,
  *	~4 Gb is good enough for about 750,000,000 bases	*/
@@ -215,15 +219,15 @@ return TRUE;
 static void findWibFile(struct wiggleDataStream *wds, char *file)
 /* look for file in full pathname given, or in same directory */
 {
-wds->wibFile = cloneString(file);
-wds->wibFH = open(wds->wibFile, O_RDONLY);
-if (wds->wibFH == -1)
+wds->wibFile = hReplaceGbdb(file);
+wds->wibFH = udcFileMayOpen(wds->wibFile, NULL);
+if (wds->wibFH == NULL)
     {
     char *baseName = strrchr(wds->wibFile, '/');
     if (baseName)
-	wds->wibFH = open(baseName+1, O_RDONLY);
-    if ((NULL == baseName) || (wds->wibFH == -1))
-	errAbort("openWibFile: failed to open %s", wds->wibFile);
+	wds->wibFH = udcFileMayOpen(baseName+1, NULL);
+    if ((NULL == baseName) || (wds->wibFH == NULL))
+	errAbort("findWibFile: failed to open %s", wds->wibFile);
     }
 }
 
@@ -234,7 +238,7 @@ if (wds->wibFile)
     if (differentString(wds->wibFile,file))
 	{
 	if (wds->wibFH > 0)
-	    close(wds->wibFH);
+	    udcFileClose(&wds->wibFH);
 	freeMem(wds->wibFile);
 	findWibFile(wds, file);
 	}
@@ -331,8 +335,8 @@ static void closeWibFile(struct wiggleDataStream *wds)
 /*	if there is a Wib file open, close it	*/
 {
 if (wds->wibFH > 0)
-    close(wds->wibFH);
-wds->wibFH = -1;
+    udcFileClose(&wds->wibFH);
+wds->wibFH = (struct udcFile*)NULL;
 if (wds->wibFile)
     freez(&wds->wibFile);
 }
@@ -1174,10 +1178,10 @@ for ( ; (!maxReached) && nextRow(wds, row, WIGGLE_NUM_COLS);
 		    /* possibly open a new wib file */
 	readData = (unsigned char *) needMem((size_t) (wiggle->count + 1));
 	wds->bytesRead += wiggle->count;
-	lseek(wds->wibFH, wiggle->offset, SEEK_SET);
+	udcSeek(wds->wibFH, wiggle->offset);
 	bytesToRead = (size_t) wiggle->count * (size_t) sizeof(unsigned char);
 
-	bytesRead = read(wds->wibFH, readData, bytesToRead);
+	bytesRead = udcRead(wds->wibFH, readData, bytesToRead);
 
 	if (bytesToRead != bytesRead)
 	    {
@@ -2258,7 +2262,7 @@ AllocVar(wdstream);
  */
 wdstream->isFile = FALSE;
 wdstream->useDataConstraint = FALSE;
-wdstream->wibFH = -1;
+wdstream->wibFH = (struct udcFile*)NULL;
 wdstream->limit_0 = -1 * INFINITY;
 wdstream->limit_1 = INFINITY;
 wdstream->wigCmpSwitch = wigNoOp_e;

@@ -14,9 +14,10 @@ update:
 	${MAKE} clean
 
 topLibs:
-	@./machTest.sh
+	@MACHTYPE=${MACHTYPE} ./machTest.sh
 	cd lib && ${MAKE}
 	cd jkOwnLib && ${MAKE}
+	cd parasol/lib && ${MAKE}
 
 hgLib:
 	@./hg/sqlEnvTest.sh
@@ -98,13 +99,15 @@ test:: $(testDirs:%=%.test)
 %.test:
 	cd $* && ${MAKE} test
 
-LIB_TAGS_IN = lib/*.[hc] */lib/*.[hc] */*/lib/*.[hc] jkOwnLib/*.c inc/*.h hg/inc/*.h hg/encode3/encodeDataWarehouse/lib/*.c hg/encode3/encodeDataWarehouse/inc/*.h
+LIB_TAGS_IN = lib/*.[hc] */lib/*.[hc] */*/lib/*.[hc] */*/*/lib/*.[hc] jkOwnLib/*.c inc/*.h hg/inc/*.h hg/encode3/encodeDataWarehouse/lib/*.c hg/encode3/encodeDataWarehouse/inc/*.h hg/encode3/eap/inc/*.h
 
 # build tags for libraries
 .PHONY: tags
 tags:
 	ctags ${LIB_TAGS_IN}
 
+cscope: 
+	cscope -Rb
 # build emacs tags for libraries
 .PHONY: etags
 etags:
@@ -159,3 +162,21 @@ buildCellar: $(cellarDirs:%=%.cellar)
 cleanCellar: $(cellarDirs:%=%.cellarClean)
 %.cellarClean:
 	cd $* && echo $* && $(MAKE) clean
+
+## top level target for everything html related
+DOCS_LIST = hg/htdocs hg/js hg/htdocs/style
+doc: ${DOCS_LIST:%=%.docuser}
+%.docuser:
+	cd $* && $(MAKE)
+
+doc-alpha: ${DOCS_LIST:%=%.docalpha}
+%.docalpha:
+	cd $* && $(MAKE) alpha
+
+doc-beta: ${DOCS_LIST:%=%.docbeta}
+%.docbeta:
+	cd $* && $(MAKE) beta
+
+doc-install: ${DOCS_LIST:%=%.docinstall}
+%.docinstall:
+	cd $* && $(MAKE) install

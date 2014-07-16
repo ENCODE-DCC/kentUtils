@@ -1,4 +1,7 @@
 /* snp125Ui.c - enums & char arrays for snp UI features and shared util code */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "snp125Ui.h"
 #include "snp125.h"
 #include "common.h"
@@ -148,7 +151,7 @@ char *snp125ClassDataName[] = {
     "unknown",
     "single",
     "in-del",
-    "heterozygous",
+    "het",
     "microsatellite",
     "named",
     "no variation",
@@ -235,7 +238,8 @@ static char *snp125ValidOldIncludeVars[] = {
     "snp125Valid1000GenomesInclude",
 };
 
-int snp125ValidArraySize   = ArraySize(snp125ValidLabels);
+int snp125ValidArraySizeHuman   = ArraySize(snp125ValidLabels);
+int snp125ValidArraySizeNonHuman  = ArraySize(snp125ValidLabels) - 2; // No HapMap, 1000Genomes
 
 /****** function related controls *******/
 /* Values are a subset of snpNNN.func values:
@@ -632,7 +636,7 @@ else
 	{
 	oldVarNames = snp125ValidOldIncludeVars;
 	oldDataName = snp125ValidDataName;
-	oldArraySize = snp125ValidArraySize;
+	oldArraySize = snp125ValidArraySizeHuman;
 	}
     else if (sameString(attribute, "func"))
 	{
@@ -716,7 +720,7 @@ if (version >= 132)
     }
 else
     {
-    if (cs < 0 || cs >= snp125ColorSourceArraySize)
+    if (cs >= snp125ColorSourceArraySize)
 	errAbort("Bad color source for build 131 or earlier (%d)", cs);
     return snp125ColorSourceLabels[cs];
     }

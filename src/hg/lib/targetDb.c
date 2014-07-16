@@ -2,11 +2,16 @@
  * generated targetDb.h and targetDb.sql.  This module links the database and
  * the RAM representation of objects. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "linefile.h"
 #include "dystring.h"
 #include "jksql.h"
 #include "targetDb.h"
+#include "udc.h"
+#include "hdb.h"
 
 
 void targetDbStaticLoad(char **row, struct targetDb *ret)
@@ -39,7 +44,7 @@ ret->db = cloneString(row[2]);
 ret->pslTable = cloneString(row[3]);
 ret->seqTable = cloneString(row[4]);
 ret->extFileTable = cloneString(row[5]);
-ret->seqFile = cloneString(row[6]);
+ret->seqFile = hReplaceGbdb(row[6]);
 ret->priority = sqlFloat(row[7]);
 ret->time = cloneString(row[8]);
 ret->settings = cloneString(row[9]);
@@ -201,10 +206,25 @@ static boolean timeMoreRecentThanFile(long time, char *fileName)
 /* Return TRUE if the given UNIX time is more recent than the time that
  * fileName was last modified. */
 {
-if (! fileExists(fileName))
-    return FALSE;
-long fileUpdateTime = fileModTime(fileName);
-return (time > fileUpdateTime);
+bool ret = FALSE;
+char *fileName2 = hReplaceGbdb(fileName);
+if (fileExists(fileName2))
+    {
+    long fileUpdateTime = fileModTime(fileName2);
+    ret = (time > fileUpdateTime);
+    }
+else 
+    // file is a http url
+    {
+    struct udcFile *uf = udcFileMayOpen(fileName2, NULL);
+    if (uf != NULL)
+        {
+        long urlUpdateTime = udcUpdateTime(uf);
+        ret = (time > urlUpdateTime);
+        }
+    }
+freeMem(fileName2);
+return ret;
 }
 
 struct targetDb *targetDbMaybeLoad(struct sqlConnection *conn, char **row)

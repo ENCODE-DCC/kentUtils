@@ -1,5 +1,8 @@
 /* checkTableCoords - Check several invariants on genomic coordinates of 
  * each item in all table in the specified db (or just the specified table). */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "options.h"
 #include "verbose.h"
@@ -37,6 +40,12 @@ static struct optionSpec optionSpecs[] = {
     {"justList",      OPTION_BOOLEAN},
     {NULL, 0}
 };
+
+// Currently we do per-chrom queries to check coords, but for scaffold-based assemblies
+// with many thousands of sequences that's too slow.  So... we just don't check those.
+// This should be rewritten to do whole-table query when a table is not split.
+// Using annoStreamDb would keep the memory usage reasonable.
+#define MAX_SEQS_SUPPORTED 1000
 
 /* Err strings for reportErrors(), all formatted with a %s followed by a %d */
 #define START_LT_ZERO "%s.%s has %d records with start < 0.\n"
@@ -221,14 +230,6 @@ boolean gotError = 0;
 int startLTZ = 0, endLTStart = 0, endGTChrom = 0;
 for (bed = bedList;  bed != NULL;  bed = bed->next)
     {
-    if (bed->chromStart < 0)
-	{
-	verbose(2, "%s.%s item %s %s:%d-%d: %s < 0\n",
-		db, table, bed->name ? bed->name : "",
-		bed->chrom, bed->chromStart, bed->chromEnd,
-		hti->startField);
-	startLTZ++;
-	}
     if (bed->chromEnd < bed->chromStart)
 	{
 	verbose(2, "%s.%s item %s %s:%d-%d: %s < %s\n",
@@ -455,7 +456,7 @@ for (curTable = tableList;  curTable != NULL;  curTable = curTable->next)
         /* items with bad chrom will be invisible to hGetBedRange(), so 
 	 * catch them here by SQL query. */
 	/* The SQL query is too huge for scaffold-based db's, check count: */
-	if (hChromCount(db) <= HDB_MAX_SEQS_FOR_SPLIT)
+	if (hChromCount(db) <= MAX_SEQS_SUPPORTED)
 	    {
 	    if (isNotEmpty(hti->chromField))
 		{

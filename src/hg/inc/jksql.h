@@ -98,11 +98,18 @@ char* sqlGetHost(struct sqlConnection *sc);
 struct slName *sqlGetAllDatabase(struct sqlConnection *sc);
 /* Get a list of all database on the server */
 
+struct slName *sqlListTablesLike(struct sqlConnection *conn, char *likeExpr);
+/* Return list of tables in database associated with conn. Optionally filter list with
+ * given LIKE expression that can be NULL or string e.g. "LIKE 'snp%'". */
+
 struct slName *sqlListTables(struct sqlConnection *conn);
 /* Return list of tables in database associated with conn. */
 
 struct slName *sqlListFields(struct sqlConnection *conn, char *table);
 /* Return list of fields in table. */
+
+struct sqlResult *sqlDescribe(struct sqlConnection *conn, char *table);
+/* Run the sql DESCRIBE command or get a cached table description and return the sql result */
 
 void sqlAddDatabaseFields(char *database, struct hash *hash);
 /* Add fields from the one database to hash. */
@@ -221,6 +228,10 @@ char *sqlEscapeTabFileString2(char *to, const char *from);
 /* Escape a string for including in a tab seperated file. Output string
  * must be 2*strlen(from)+1 */
 
+char *sqlEscapeTabFileString(const char *from);
+/* Escape a string for including in a tab seperated file. Freez or freeMem
+ * result when done. */
+
 struct sqlResult *sqlMustGetResult(struct sqlConnection *sc, char *query);
 /* Query database.
  * old comment: If result empty squawk and die.
@@ -313,6 +324,10 @@ struct slInt *sqlQuickNumList(struct sqlConnection *conn, char *query);
 struct slDouble *sqlQuickDoubleList(struct sqlConnection *conn, char *query);
 /* Return a list of slDoubles for a single column query.
  * Do a slFreeList on result when done. */
+
+struct slPair *sqlQuickPairList(struct sqlConnection *conn, char *query);
+/* Return a list of slPairs with the results of a two-column query.
+ * Free result with slPairFreeValsAndList. */
 
 void sqlRenameTable(struct sqlConnection *sc, char *table1, char *table2);
 /* Rename table */
@@ -672,5 +687,9 @@ void sqlCheckError(char *format, ...)
 __attribute__((format(printf, 1, 2)))
 #endif
 ;
+
+struct sqlConnection *sqlFailoverConn(struct sqlConnection *sc);
+/* returns the failover connection of a connection or NULL.
+ * (Needed because the sqlConnection is not in the .h file) */
 
 #endif /* JKSQL_H */

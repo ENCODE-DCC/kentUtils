@@ -1,4 +1,7 @@
 /* edwMakeContaminationQa - Screen for contaminants by aligning against contaminant genomes.. */
+
+/* Copyright (C) 2013 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -52,7 +55,7 @@ void alignFastqMakeBed(struct edwFile *ef, struct edwAssembly *assembly,
  * Update vf->mapRatio and related fields. */
 {
 edwAlignFastqMakeBed(ef, assembly, fastqPath, vf, bedF, 
-    &vf->mapRatio, &vf->depth, &vf->sampleCoverage);
+    &vf->mapRatio, &vf->depth, &vf->sampleCoverage, &vf->uniqueMapRatio);
 }
 
 #define FASTQ_SAMPLE_SIZE 100000
@@ -132,9 +135,9 @@ if (needScreen)
 	if (matchCount <= 0)
 	    {
 	    /* We run the bed-file maker, just for side effect calcs. */
-	    double mapRatio = 0, depth = 0, sampleCoverage = 0;
+	    double mapRatio = 0, depth = 0, sampleCoverage = 0, uniqueMapRatio;
 	    edwAlignFastqMakeBed(ef, newAsm, sampleFastqName, vf, NULL,
-		&mapRatio, &depth, &sampleCoverage);
+		&mapRatio, &depth, &sampleCoverage, &uniqueMapRatio);
 
 	    verbose(1, "%s mapRatio %g, depth %g, sampleCoverage %g\n", 
 		newAsm->name, mapRatio, depth, sampleCoverage);

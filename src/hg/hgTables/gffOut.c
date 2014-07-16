@@ -1,5 +1,8 @@
 /* gffOut - output GFF (from bed data structures). */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "hash.h"
 #include "linefile.h"
@@ -380,6 +383,21 @@ slReverse(&list);
 return list;
 }
 
+static struct hash *makeChromHashForTable(struct sqlConnection *conn, char *table)
+/* Get a hash of all the chroms that are actually being used for the table.
+ * This is helpful for assemblies with huge numbers of chroms. */
+{
+char query[1024];
+// Make sure that the table has a chrom field.
+// a bbi table will NOT have a chrom field
+int cIdx = sqlFieldIndex(conn, table, "chrom");
+if (cIdx < 0)
+    return NULL;
+sqlSafef(query, sizeof query, "select distinct chrom, 'dummyvalue' from %s", table);
+struct hash *hash = sqlQuickHash(conn, query);
+return hash;
+}
+
 void doOutGff(char *table, struct sqlConnection *conn, boolean outputGtf)
 /* Save as GFF/GTF. */
 {
@@ -392,16 +410,32 @@ struct region *region, *regionList = getRegions();
 
 textOpen();
 
-int efIdx = sqlFieldIndex(conn, table, "exonFrames");
-
+boolean simpleTableExists = sqlTableExists(conn, table);
+// simpleTable means not split table, not custom track
+// However it still can include bbi table with bam fileName path
+int efIdx = -1;
+if (simpleTableExists)  // no tables having exonFrames are split tables anyway
+    efIdx = sqlFieldIndex(conn, table, "exonFrames");
 safef(source, sizeof(source), "%s_%s", database, table);
 itemCount = 0;
+struct hash *chromHash = NULL;
+int regionCount = slCount(regionList);
+// regionList can have many thousands of items e.g. rheMac3 has 34000 chroms!
+// This regionCount threshold should be just above the # chroms in the latest human assembly
+if (simpleTableExists && (regionCount > 500))  
+    {
+    chromHash = makeChromHashForTable(conn, table);
+    };
+// Process each region
 for (region = regionList; region != NULL; region = region->next)
     {
+    if (chromHash && (!hashFindVal(chromHash, region->chrom)))
+	    continue;
     struct lm *lm = lmInit(64*1024);
     int fieldCount;
     bedList = cookedBedList(conn, table, region, lm, &fieldCount);
-    if (efIdx != -1)
+    // Use exonFrames field if available for better accuracy instead of calculating from coordinates
+    if (efIdx != -1) 
 	exonFramesList = getExonFrames(table, conn, bedList);
     itemCount += bedToGffLines(bedList, exonFramesList, hti, fieldCount, source, outputGtf);
     lmCleanup(&lm);

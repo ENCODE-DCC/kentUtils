@@ -1,4 +1,7 @@
 /* txOrtho - Produce list of shared edges between two transcription graphs in two species. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -219,7 +222,7 @@ if(ixc != NULL)
     if(subChain != NULL)
 	{
 	qChainRangePlusStrand(subChain, &qs, &qe);
-	if ((subChain->qStrand == '-'))
+	if (subChain->qStrand == '-')
 	    reverse = TRUE;
 	if(reverse)
 	    { 
@@ -460,7 +463,7 @@ if (start == subChain->tStart)
     *retStartExact = TRUE;
 if (end == subChain->tEnd)
     *retEndExact = TRUE;
-if ((subChain->qStrand == '-'))
+if (subChain->qStrand == '-')
     *retRev = TRUE;
 *retCoverage = chainBasesInBlocks(subChain);
 chainFree(&toFree);

@@ -9,7 +9,7 @@
 #include "cheapcgi.h"
 #include "portable.h"
 #include "linefile.h"
-#include "errabort.h"
+#include "errAbort.h"
 #ifndef GBROWSE
 #include "mime.h"
 #endif /* GBROWSE */
@@ -157,7 +157,7 @@ enum browserType cgiClientBrowser(char **browserQualifier, enum osType *clientOs
 // WARNING: The specifics of the HTTP_USER_AGENT vary widely.
 //          This has only been tested on a few cases.
 static enum browserType clientBrowser = btUnknown;
-static enum browserType clientOsType  = osUnknown;
+static enum browserType clientOsType  = (enum browserType)osUnknown;
 static char *clientBrowserExtra       = NULL;
 static char *clientOsExtra            = NULL;
 
@@ -206,25 +206,25 @@ if (clientBrowser == btUnknown)
         // Determine the OS
         if ((ptr = stringIn("Windows",userAgent)) != NULL)
             {
-            clientOsType = osWindows;
+            clientOsType = (enum browserType)osWindows;
             ptr += strlen("Windows ");
             clientOsExtra = cloneFirstWordByDelimiter(ptr,';');
             }
         else if ((ptr = stringIn("Linux",userAgent)) != NULL)
             {
-            clientOsType = osLinux;
+            clientOsType = (enum browserType)osLinux;
             ptr += strlen("Linux ");
             clientOsExtra = cloneFirstWordByDelimiter(ptr,';');
             }
         else if ((ptr = stringIn("Mac ",userAgent)) != NULL)
             {
-            clientOsType = osMac;
+            clientOsType = (enum browserType)osMac;
             ptr += strlen("Mac ");
             clientOsExtra = cloneFirstWordByDelimiter(ptr,';');
             }
         else
             {
-            clientOsType = osOther;
+            clientOsType = (enum browserType)osOther;
             }
         }
     }
@@ -236,7 +236,7 @@ if (browserQualifier != NULL)
         *browserQualifier = NULL;
     }
 if (clientOs != NULL)
-    *clientOs = clientOsType;
+    *clientOs = (enum osType)clientOsType;
 if (clientOsQualifier != NULL)
     {
     if (clientOsExtra != NULL)
@@ -623,6 +623,20 @@ if (d != NULL)
     }
 }
 
+void cgiDictionaryFreeList(struct cgiDictionary **pList)
+/* Free up a whole list of cgiDictionaries */
+{
+struct cgiDictionary *el, *next;
+
+for (el = *pList; el != NULL; el = next)
+    {
+    next = el->next;
+    cgiDictionaryFree(&el);
+    }
+*pList = NULL;
+}
+
+
 void cgiParseInputAbort(char *input, struct hash **retHash,
         struct cgiVar **retList)
 /* Parse cgi-style input into a hash table and list.  This will alter
@@ -911,6 +925,21 @@ return outString;
 }
 
 
+/* NOTE: Where in the URL to use which of these functions:
+ *
+ * Parts of a URL:
+ *   protocol://user:password@server.com:port/path/filename?var1=val1&var2=val2
+ *
+ * Note that a space should only be encoded to a plus and decoded from a plus
+ * when dealing with http URLs in the query part of the string,
+ * which is the part after the ? above.
+ * It should not be used in the rest of the URL.  
+ * So in the query string part of a URL, do use cgiEncode/cgiDecode. 
+ * And in the rest of the URL, use cgiEncodeFUll/cgiDecodeFull 
+ * which do not code space as plus.
+ * Since FTP does not use URLs with query parameters, use the Full version.
+ */
+
 void cgiDecode(char *in, char *out, int inLength)
 /* Decode from cgi pluses-for-spaces format to normal.
  * Out will be a little shorter than in typically, and
@@ -924,6 +953,31 @@ for (i=0; i<inLength;++i)
     if (c == '+')
 	*out++ = ' ';
     else if (c == '%')
+	{
+	int code;
+        if (sscanf(in, "%2x", &code) != 1)
+	    code = '?';
+	in += 2;
+	i += 2;
+	*out++ = code;
+	}
+    else
+	*out++ = c;
+    }
+*out++ = 0;
+}
+
+void cgiDecodeFull(char *in, char *out, int inLength)
+/* Out will be a cgi-decoded version of in (no space from plus!).
+ * Out will be a little shorter than in typically, and
+ * can be the same buffer. */
+{
+char c;
+int i;
+for (i=0; i<inLength;++i)
+    {
+    c = *in++;
+    if (c == '%')
 	{
 	int code;
         if (sscanf(in, "%2x", &code) != 1)

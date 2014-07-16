@@ -1,6 +1,6 @@
 include ../../../../inc/common.mk
 
-O = encodeDataWarehouse.o edwFastqFileFromRa.o edwLib.o
+O = encodeDataWarehouse.o edwBamFileFromRa.o edwFastqFileFromRa.o edwLib.o edwQaWigSpotFromRa.o
 
 ${MACHTYPE}/edwlib.a: ${O}
 	mkdir -p ${MACHTYPE}
@@ -8,4 +8,4 @@ ${MACHTYPE}/edwlib.a: ${O}
 	ranlib ${MACHTYPE}/edwlib.a
 
 clean::
-	rm -f ${O}
+	rm -f ${O} ${MACHTYPE}/edwlib.a

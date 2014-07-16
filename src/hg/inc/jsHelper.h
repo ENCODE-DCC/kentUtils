@@ -1,5 +1,8 @@
 // jsHelper.c - helper routines for interface between CGIs and client-side javascript
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #ifndef JSHELPER_H
 #define JSHELPER_H
 
@@ -135,6 +138,12 @@ void jsBeginCollapsibleSectionFontSize(struct cart *cart, char *track, char *sec
 				       char *sectionTitle, boolean isOpenDefault, char *fontSize);
 /* Make the hidden input, collapse/expand button and <TR id=...> needed for utils.js's
  * setTableRowVisibility().  Caller needs to have already created a <TABLE> and <FORM>. */
+
+void jsBeginCollapsibleSectionOldStyle(struct cart *cart, char *track, char *section,
+				       char *sectionTitle, boolean isOpenDefault);
+/* Make the hidden input, collapse/expand button and <TR id=...> needed for utils.js's
+ * setTableRowVisibility().  Caller needs to have already created a <TABLE> and <FORM>. 
+ * With support for varying font size */
 
 void jsEndCollapsibleSection();
 /* End the collapsible <TR id=...>. */

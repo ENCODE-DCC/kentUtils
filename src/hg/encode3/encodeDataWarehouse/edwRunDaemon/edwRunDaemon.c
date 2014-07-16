@@ -3,6 +3,17 @@
  * sent a signal (anything ending with a newline actually) that tells it to go look
  * at database now. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
+/* Version history -
+ *  v2 - making it so daemon only keeps current job in memory consulting db table always
+ *       for next job.  This simplifies code and allows the daemon to respond to changes 
+ *       the job table at the expense of spinning the DB daemon a little more often.  Also
+ *       maintaining a new column, pid, that contains unix process id for the job. 
+ *  v3 - put delay to default to 1, since seems to be needed when restarting if there are
+ *       jobs in the queue. */
+
 #include <sys/wait.h>
 #include "common.h"
 #include "linefile.h"
@@ -17,12 +28,13 @@
 #include "edwLib.h"
 
 char *clDatabase, *clTable;
+int clDelay = 1;
 
 void usage()
 /* Explain usage and exit. */
 {
 errAbort(
-  "edwRunDaemon - Run jobs on multiple processers in background.  This is done with\n"
+  "edwRunDaemon v3 - Run jobs on multiple processers in background.  This is done with\n"
   "a combination of infrequent polling of the database, and a unix fifo which can be\n"
   "sent a signal (anything ending with a newline actually) that tells it to go look\n"
   "at database now.\n"
@@ -39,6 +51,8 @@ errAbort(
   "        There are not many of these.  Error mesages from jobs daemon runs end up\n"
   "        in errorMessage fields of database.\n"
   "   -logFacility - sends error messages and such to system log facility instead.\n"
+  "   -delay=N - delay this many seconds before starting a job, default %d\n"
+  , clDelay
   );
 }
 
@@ -47,6 +61,7 @@ static struct optionSpec options[] = {
    {"log", OPTION_STRING},
    {"logFacility", OPTION_STRING},
    {"debug", OPTION_BOOLEAN},
+   {"delay", OPTION_INT},
    {NULL, 0},
 };
 
@@ -64,6 +79,12 @@ struct runner *runners;
 void finishRun(struct runner *run, int status)
 /* Finish up job. Copy results into database */
 {
+/* Clean up wait status so will show 0 for nice successful jobs */
+if (!WIFEXITED(status))
+    status = -1;
+else
+    status = WEXITSTATUS(status);
+
 /* Get job and fill in two easy fields. */
 struct edwJob *job = run->job;
 job->endTime = edwNow();
@@ -158,16 +179,8 @@ if (errFd < 0)
 
 ++curThreads;
 job->startTime = edwNow();
-
-/* Save start time to database. */
-struct sqlConnection *conn = sqlConnect(clDatabase);
-char query[256];
-sqlSafef(query, sizeof(query), "update %s set startTime=%lld where id=%lld", 
-    clTable, job->startTime, (long long)job->id);
-sqlUpdate(conn, query);
-sqlDisconnect(&conn);
-
 runner->job = job;
+
 int childId;
 if ((childId = mustFork()) == 0)
     {
@@ -176,18 +189,29 @@ if ((childId = mustFork()) == 0)
         errnoAbort("Can't dup2 stderr to %s", tempFileName);
     int status = system(job->commandLine);
     if (status != 0)
-        exit(-1);
+	{
+	errAbort("Error: status %d from system of %s", status, job->commandLine);
+	}
     else
 	exit(0);
     }
 else
     {
+    /* Save start time and process ID to database. */
+    struct sqlConnection *conn = sqlConnect(clDatabase);
+    char query[256];
+    sqlSafef(query, sizeof(query), "update %s set startTime=%lld, pid=%d where id=%lld", 
+	clTable, job->startTime, childId, (long long)job->id);
+    sqlUpdate(conn, query);
+    sqlDisconnect(&conn);
+
     /* We be parent - just fill in job info */
     close(errFd);
     runner->pid = childId;
     runner->errFileName = cloneString(tempFileName);
     }
 }
+
 
 void readAndIgnore(int fd, int byteCount)
 /* Read byteCount from fd, and just throw it away.  We are just using named pipe
@@ -225,6 +249,8 @@ if (bytesReady > 0)
 void edwRunDaemon(char *database, char *table, char *countString, char *namedPipe)
 /* edwRunDaemon - Run jobs on multiple processers in background. . */
 {
+warn("Starting edwRunDaemon v2 on %s.%s with %s jobs synced on %s", 
+    database, table, countString,namedPipe);
 clDatabase = database;
 clTable = table;
 
@@ -239,42 +265,59 @@ AllocArray(runners, maxThreadCount);
 int fd = mustOpenFd(namedPipe, O_RDONLY);      // Program waits here until something written to pipe
 int dummyFd = mustOpenFd(namedPipe, O_WRONLY); // Keeps pipe from generating EOF when empty
 
-struct edwJob *jobList = NULL;
 long long lastId = 0;  // Keep track of lastId in run table that has already been handled.
+int connMiss = 0;
+long long lastMiss = 0;
 
 for (;;)
     {
-    /* Wait for signal to come on named pipe or 30 seconds to pass */
-    syncWithTimeout(fd, 30*1000000);
-
     /* Finish up processing on any children that have finished */
     while (checkOnChildRunner(FALSE) != NULL)	
         ;
 
     /* Get next bits of work from database. */
-    struct sqlConnection *conn = sqlConnect(database);
-    char query[256];
-    sqlSafef(query, sizeof(query), 
-	"select * from %s where startTime = 0 and id > %lld order by id", table, lastId);
-    struct edwJob *newJobs = edwJobLoadByQuery(conn, query);
-    int newJobCount = slCount(newJobs);
-    if (newJobCount > 0)
-	{
-	struct edwJob *lastJob = slLastEl(newJobs);
-	lastId = lastJob->id;
-	}
-    verbose(2, "Got %d new jobs\n", newJobCount);
-    sqlDisconnect(&conn);
-    jobList = slCat(jobList, newJobs);
-
-    while (jobList != NULL)
+    struct sqlConnection *conn = sqlMayConnect(database);
+    struct edwJob *job = NULL;
+    if (conn != NULL)
         {
-	struct edwJob *job = jobList;
-	jobList = jobList->next;
+	/* Connected no problem, let's get next job. */
+	char query[256];
+	sqlSafef(query, sizeof(query), 
+	    "select * from %s where startTime = 0 and id > %lld order by id limit 1", 
+	    table, lastId);
+	job = edwJobLoadByQuery(conn, query);
+	sqlDisconnect(&conn);
+	}
+    else
+        {
+	/* Did not connect to database.  Oh well. Don't just abort, this happens. */
+	/* Track error of no connect.  Give it 10 tries every now and again before giving up. */
+	long long now = edwNow();
+
+	/* Reset max-retry counter every 10 minutes */
+	warn("Missed connection to %s at %lld", database, now);
+	int betweenBursts = 60 * 10;   // Seconds to allow between bursts of noise
+	if (now - lastMiss > betweenBursts)
+	    connMiss = 0;
+
+	/* Allow 12 retries (2 minutes downtime) */
+	int maxTries = 12;
+	if (++connMiss > maxTries)
+	    errAbort("%d misses connecting to %s, aborting", connMiss, database);
+	lastMiss = now;
+	}
+
+    if (job != NULL)
+        {
+	lastId = job->id;
 	struct runner *runner = findFreeRunner();
-	syncWithTimeout(fd, 0);
 	runJob(runner, job);
-	sleep(2);  // Give edwSubmit a chance to work so as to exclude duplicate submission.
+	sleep(clDelay); // Avoid network storm
+	}
+    else
+        {
+	/* Wait for signal to come on named pipe or 10 seconds to pass */
+	syncWithTimeout(fd, 10*1000000);
 	}
     }
 close(dummyFd);
@@ -284,6 +327,7 @@ int main(int argc, char *argv[])
 /* Process command line. */
 {
 optionInit(&argc, argv, options);
+clDelay = optionInt("delay", clDelay);
 if (argc != 5)
     usage();
 logDaemonize(argv[0]);

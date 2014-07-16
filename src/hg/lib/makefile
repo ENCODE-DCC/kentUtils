@@ -5,11 +5,12 @@ XINC = -I$(MYSQLINC)
 O = acemblyClass.o affyAllExonProbe.o affyAtlas.o affy10KDetails.o affy120KDetails.o \
     affyOffset.o affyPairs.o agp.o agpFrag.o agpGap.o alignSeqSizes.o altGraph.o \
     altGraphX.o ancientRref.o \
-    annoFormatVep.o annoGratorGpVar.o annoGrateWigDb.o annoStreamDb.o annoStreamWig.o \
+    annoFormatVep.o annoGratorGpVar.o annoGrateWigDb.o \
+    annoStreamDb.o annoStreamDbFactorSource.o annoStreamWig.o \
     api.o atomDb.o  axtInfo.o \
     axtLib.o bactigPos.o hgBam.o baseMaskCommon.o bdgpExprLink.o bdgpGeneInfo.o \
-    bed.o bed5FloatScore.o bed5Pval.o bed6FloatScore.o bed8Attrs.o bed12Source.o \
-    bed12wSeq.o bedCart.o bgiGeneInfo.o bgiGeneSnp.o bgiSnp.o bioImage.o \
+    bed.o bed5FloatScore.o bed5Pval.o bed6FloatScore.o  bed8Attrs.o bed12Source.o \
+    bed12wSeq.o bedCart.o bgiGeneInfo.o bgiGeneSnp.o bgiSnp.o bigBedFind.o bioImage.o \
     blastTab.o blastzNet.o blatServers.o borf.o borkPseudoHom.o botDelay.o\
     cart.o cartDb.o cdsEvidence.o cdsOrtho.o cdsPick.o cdsSpec.o \
     ccdsInfo.o ccdsNotes.o ccdsGeneMap.o celeraCoverage.o \
@@ -22,7 +23,7 @@ O = acemblyClass.o affyAllExonProbe.o affyAtlas.o affy10KDetails.o affy120KDetai
     cnpIafrate.o cnpIafrate2.o cnpLocke.o cnpRedon.o cnpSebat.o cnpSebat2.o \
     cnpSharp2.o cnpSharpCutoff.o cnpSharpSample.o cnpSharp.o \
     cpgIsland.o cpgIslandExt.o ctgPos.o ctgPos2.o \
-    bedDetail.o \
+    bedDetail.o cgiApoptosis.o \
     customFactory.o customPp.o customTrack.o cutter.o cv.o cytoBand.o \
     dbDb.o dbRIP.o dbSnpRs.o defaultDb.o delConrad2.o delHinds2.o \
     dgv.o dgvPlus.o dless.o dnaMotifSql.o dnaMarkovSql.o dnaProbe.o \
@@ -66,7 +67,7 @@ O = acemblyClass.o affyAllExonProbe.o affyAtlas.o affy10KDetails.o affy120KDetai
     jaxOrtholog.o jaxQTL.o jaxQTL3.o jksql.o joiner.o jsHelper.o kg1ToKg2.o \
     jgiGene.o \
     kgAlias.o kgColor.o kgProtAlias.o kgXref.o knownInfo.o knownMore.o knownToSuper.o \
-    ld.o ld2.o lfs.o liftOver.o liftOverChain.o liftUp.o \
+    lav.o ld.o ld2.o lfs.o liftOver.o liftOverChain.o liftUp.o \
     llaInfo.o lrg.o lsSnpPdb.o lsSnpPdbChimera.o mafFrames.o mafGene.o mafSummary.o \
     makeItemsItem.o mammalPsg.o mapSts.o \
     mcnBreakpoints.o mdb.o metaChromGraph.o microarray.o \
@@ -97,7 +98,7 @@ O = acemblyClass.o affyAllExonProbe.o affyAtlas.o affy10KDetails.o affy120KDetai
     tableDescriptions.o tableStatus.o targetDb.o tfbsConsMap.o \
     taxonDivision.o taxonGeneticCode.o taxonName.o taxonNode.o taxonXref.o \
     tigrCmrGene.o tigrOperon.o tilingPath.o traceInfo.o trackDb.o \
-    trackDbCustom.o trackHub.o trackLayout.o trackTable.o trackVersion.o trashDir.o \
+    trackDbCustom.o trackHub.o trackHubCheck.o trackLayout.o trackTable.o trackVersion.o trashDir.o \
     transRegCode.o transRegCodeCondition.o \
     transRegCodeProbe.o txCluster.o txCommon.o txEdgeBed.o \
     txEdgeOrtho.o txGraph.o txInfo.o txRnaAccs.o ucscRetroInfo.o ucscRetroOrtho.o \

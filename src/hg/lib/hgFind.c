@@ -1,4 +1,7 @@
 /* hgFind.c - Find things in human genome annotations. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "regexHelper.h"
 #include "obscure.h"
@@ -34,6 +37,7 @@
 #include "trackHub.h"
 #include "udc.h"
 #include "hubConnect.h"
+#include "bigBedFind.h"
 
 
 // Exhaustive searches can lead to timeouts on CGIs (#11626).
@@ -547,18 +551,32 @@ slAddHead(&hgp->tableList, table);
 return table;
 }
 
+char *makeIndexPath(char *db)
+{
+/* create the pathname with the knowngene index for a db, result needs to be freed */
+char *path = needMem(PATH_LEN);
+safef(path, PATH_LEN, "/gbdb/%s/knownGene.ix", db);
+char *newPath = hReplaceGbdb(path);
+freez(&path);
+return newPath;
+}
+
 static boolean gotFullText(char *db)
 /* Return TRUE if we have full text index. */
 {
-char path[PATH_LEN];
-safef(path, sizeof(path), "/gbdb/%s/knownGene.ix", db);
-if (fileExists(path))
-    return TRUE;
+char *indexPath = makeIndexPath(db);
+boolean result = FALSE;
+
+if (udcExists(indexPath))
+    result = TRUE;
 else
     {
-    warn("%s doesn't exist", path);
-    return FALSE;
+    warn("%s doesn't exist", indexPath);
+    result = FALSE;
     }
+
+freez(&indexPath);
+return result;
 }
 
 struct tsrPos
@@ -679,7 +697,6 @@ dyStringFree(&dy);
 boolean findKnownGeneFullText(char *db, char *term,struct hgPositions *hgp)
 /* Look for position in full text. */
 {
-char path[PATH_LEN];
 boolean gotIt = FALSE;
 struct trix *trix;
 struct trixSearchResult *tsrList;
@@ -687,7 +704,7 @@ char *lowered = cloneString(term);
 char *keyWords[HGFIND_MAX_KEYWORDS];
 int keyCount;
 
-safef(path, sizeof(path), "/gbdb/%s/knownGene.ix", db);
+char *path = makeIndexPath(db);
 trix = trixOpen(path);
 tolowers(lowered);
 keyCount = chopLine(lowered, keyWords);
@@ -836,7 +853,7 @@ if (dy == NULL)
     {
     dy = newDyString(64);
     if (cart != NULL)
-	dyStringPrintf(dy, "%s=%u", cartSessionVarName(), cartSessionId(cart));
+	dyStringPrintf(dy, "%s=%s", cartSessionVarName(), cartSessionId(cart));
     s = dy->string;
     }
 return s;
@@ -2414,6 +2431,7 @@ char *ui = getUiUrl(cart);
 char *extraCgi = hgp->extraCgi;
 char hgAppCombiner = (strchr(hgAppName, '?')) ? '&' : '?';
 boolean containerDivPrinted = FALSE;
+struct trackDb *tdbList = NULL;
 
 if (useWeb)
     {
@@ -2425,14 +2443,17 @@ for (table = hgp->tableList; table != NULL; table = table->next)
     {
     if (table->posList != NULL)
 	{
-	char *parent = hGetParent(db, table->name);
-	char *trackName = table->name;
-	// TODO: should be able to get this from settings hash for
-	// both hub tracks and normal tracks
-	if (!isHubTrack(table->name)) 
-	    trackName = hGetTrackForTable(db, table->name);
-        if (trackName == NULL)
-            errAbort("no track for table \"%s\" found via a findSpec", table->name); // wish we had searchName
+	char *tableName = table->name;
+	if (startsWith("all_", tableName))
+	    tableName += strlen("all_");
+
+	// clear the tdb cache if this track is a hub track
+	if (isHubTrack(tableName))
+	    tdbList = NULL;
+	struct trackDb *tdb = tdbForTrack(db, tableName, &tdbList);
+	if (!tdb)
+            errAbort("no track for table \"%s\" found via a findSpec", tableName);
+	char *trackName = tdb->track;
 	char *vis = hCarefulTrackOpenVis(db, trackName);
 	boolean excludeTable = FALSE;
         if(!containerDivPrinted)
@@ -2461,10 +2482,16 @@ for (table = hgp->tableList; table != NULL; table = table->next)
 		fprintf(f, "%s=%s&", trackName, vis);
 		// this is magic to tell the browser to make the 
 		// composite and this subTrack visible
-		if (parent)
+		if (tdb->parent)
 		    {
-		    fprintf(f, "%s_sel=1&", trackName);
-		    fprintf(f, "%s_sel=1&", parent);
+		    if (tdbIsSuperTrackChild(tdb))
+			fprintf(f, "%s=show&", tdb->parent->track);
+		    else
+			{
+			// tdb is a subtrack of a composite or a view
+			fprintf(f, "%s_sel=1&", trackName);
+			fprintf(f, "%s_sel=1&", tdb->parent->track);
+			}
 		    }
 		fprintf(f, "hgFind.matches=%s,\">", encMatches);
 		htmTextOut(f, pos->name);
@@ -2606,6 +2633,15 @@ if (relativeFlag)
 }
 #endif
 
+static boolean findBigBed(char *db, struct hgFindSpec *hfs, char *spec,
+			    struct hgPositions *hgp)
+/* Look up items in bigBed  */
+{
+struct trackDb *tdb = tdbFindOrCreate(db, NULL, hfs->searchTable);
+
+return findBigBedPosInTdbList(db, tdb, spec, hgp);
+}
+
 static boolean searchSpecial(char *db, struct hgFindSpec *hfs, char *term, int limitResults,
 			     struct hgPositions *hgp, boolean relativeFlag,
 			     int relStart, int relEnd, boolean *retFound)
@@ -2633,6 +2669,10 @@ if (sameString(hfs->searchType, "knownGene"))
 else if (sameString(hfs->searchType, "refGene"))
     {
     found = findRefGenes(db, hfs, term, hgp);
+    }
+else if (sameString(hfs->searchType, "bigBed"))
+    {
+    found = findBigBed(db, hfs, term, hgp);
     }
 else if (sameString(hfs->searchType, "cytoBand"))
     {

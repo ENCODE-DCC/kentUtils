@@ -1,4 +1,7 @@
 /* chainFilter - Filter chain files. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -46,7 +49,7 @@ errAbort(
   "   -tMinSize=N    - minimum size of spanned target region\n"
   "   -tMaxSize=N    - maximum size of spanned target region\n"
   "   -noRandom      - suppress chains involving '_random' chromosomes\n"
-  "   -noHap         - suppress chains involving '_hap' chromosomes\n"
+  "   -noHap         - suppress chains involving '_hap|_alt' chromosomes\n"
   );
 }
 
@@ -296,8 +299,7 @@ for (i=0; i<inCount; ++i)
 	    }
 	if (noHap)
 	    {
-	    if (stringIn("_hap",chain->tName) 
-	    	|| stringIn("_hap",chain->qName))
+	    if (haplotype(chain->tName) || haplotype(chain->qName))
 	        writeIt = FALSE;
 	    }
 	if (writeIt)

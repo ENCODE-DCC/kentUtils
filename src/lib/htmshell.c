@@ -14,7 +14,7 @@
 #include "obscure.h"
 #include "cheapcgi.h"
 #include "htmshell.h"
-#include "errabort.h"
+#include "errAbort.h"
 #include "dnautil.h"
 
 
@@ -218,8 +218,7 @@ return cleanQuote;
 
 char *attributeEncode(char *str)
 {
-// encode double and single quotes in a string to be used as an element attribute
-return replaceChars(replaceChars(str, "\"", "&quot;"), "'", "&#39;");
+return htmlEncodeText(str, FALSE);
 }
 
 char *htmlWarnStartPattern()

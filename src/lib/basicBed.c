@@ -7,6 +7,9 @@
  * There's additional bed-related code in src/hg/inc/bed.h.  This module contains the
  * stuff that's independent of the database and other genomic structures. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 
 #include "common.h"
 #include "hash.h"
@@ -1331,7 +1334,7 @@ if (bedFieldCount >= 15)
     dyStringAppend(dy, "   float[expCount] expScores; \"Comma separated list of experiment scores.\"\n");
 int i;
 for (i=bedFieldCount+1; i<=totalFieldCount; ++i)
-    dyStringPrintf(dy, "string field%d;	\"Undocumented field\"\n", i+1);
+    dyStringPrintf(dy, "lstring field%d;	\"Undocumented field\"\n", i+1);
 dyStringAppend(dy, "   )\n");
 return dyStringCannibalize(&dy);
 }

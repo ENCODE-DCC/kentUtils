@@ -2,6 +2,9 @@
  * generated factorSource.c and factorSource.sql.  This header links the database and
  * the RAM representation of objects. */
 
+/* Copyright (C) 2013 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #ifndef FACTORSOURCE_H
 #define FACTORSOURCE_H
 
@@ -56,6 +59,9 @@ void factorSourceOutput(struct factorSource *el, FILE *f, char sep, char lastSep
 /* Print out factorSource as a comma separated list including final comma. */
 
 /* -------------------------------- End autoSql Generated Code -------------------------------- */
+
+struct asObject *factorSourceAsObj();
+/* Return asObject describing fields of factorSource */
 
 #endif /* FACTORSOURCE_H */
 

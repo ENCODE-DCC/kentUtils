@@ -68,7 +68,7 @@
 #include "options.h"
 #include "linefile.h"
 #include "hash.h"
-#include "errabort.h"
+#include "errAbort.h"
 #include "dystring.h"
 #include "dlist.h"
 #include "net.h"
@@ -1557,6 +1557,18 @@ for (rq = resultQueues; rq != NULL; rq = rq->next)
     }
 }
 
+void changeFileOwner(char *fileName, char *newOwner)
+/* Attempt to change ownership of file. */
+{
+struct passwd *pwd = getpwnam(newOwner);
+if (pwd == NULL)
+    {
+    perror("getpwnam");
+    return;
+    }
+if (chown(fileName, pwd->pw_uid, -1) == -1)
+    perror("chown");
+}
 
 void writeResults(char *fileName, char *userName, char *machineName,
 	int jobId, char *exe, time_t submitTime, time_t startTime,
@@ -1579,6 +1591,7 @@ if (rq == NULL)
     if (rq->f == NULL)
         warn("hub: couldn't open results file %s", rq->name);
     rq->lastUsed = now;
+    changeFileOwner(fileName, userName);
     }
 if (rq->f != NULL)
     {
@@ -2585,7 +2598,7 @@ pmPrintf(pm, "%-8s %4d %6d %6d %5d %3d %3d %3d %4.1fg %4d %3d %s",
 pmSend(pm, rudpOut);
 }
 
-void listBatches(struct paraMessage *pm)
+void listSomeBatches(struct paraMessage *pm, int runThreshold)
 /* Write list of batches.  Format is one batch per
  * line followed by a blank line. */
 {
@@ -2601,11 +2614,25 @@ for (user = userList; user != NULL; user = user->next)
     for (bNode = user->oldBatches->head; !dlEnd(bNode); bNode = bNode->next)
         {
 	struct batch *batch = bNode->val;
-	if (batch->runningCount > 0)
+	if (batch->runningCount >= runThreshold)
 	    writeOneBatchInfo(pm, user, batch);
 	}
     }
 pmSendString(pm, rudpOut, "");
+}
+
+void listBatches(struct paraMessage *pm)
+/* Write list of all active batches.  Format is one batch per
+ * line followed by a blank line. */
+{
+listSomeBatches(pm, 1);
+}
+
+void listAllBatches(struct paraMessage *pm)
+/* Write list of batches including inactive ones.  Format is one batch per
+ * line followed by a blank line. */
+{
+listSomeBatches(pm, 0);
 }
 
 void appendLocalTime(struct paraMessage *pm, time_t t)
@@ -3342,7 +3369,9 @@ for (;;)
     line = pm->data;
     logDebug("hub: %s", line);
     command = nextWord(&line);
-    if (sameWord(command, "jobDone"))
+    if (command == NULL)
+         warn("Empty command");
+    else if (sameWord(command, "jobDone"))
 	 jobDone(line);
     else if (sameWord(command, "recycleSpoke"))
 	 recycleSpoke(line);
@@ -3394,6 +3423,8 @@ for (;;)
 	 listUsers(pm);
     else if (sameWord(command, "listBatches"))
 	 listBatches(pm);
+    else if (sameWord(command, "listAllBatches"))
+	 listAllBatches(pm);
     else if (sameWord(command, "listSick"))
 	 listSickNodes(pm);
     else if (sameWord(command, "status"))
@@ -3406,8 +3437,10 @@ for (;;)
 	 addSpoke();
     else if (sameWord(command, "plan"))
 	 plan(pm);
-    if (sameWord(command, "quit"))
-	 break;
+    else if (sameWord(command, "quit"))
+         break;
+    else 
+         warn("Unrecognized command %s", command);
     pmFree(&pm);
     }
 endHeartbeat();

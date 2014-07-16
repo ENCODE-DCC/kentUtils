@@ -1,4 +1,7 @@
 /* bigWigMerge - Merge together multiple bigWigs into a single one.. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -6,13 +9,16 @@
 #include "localmem.h"
 #include "bbiFile.h"
 #include "bigWig.h"
+#include "obscure.h"
 
+/* version history -
+ *    v2 - added -inList option to avoid huge command lines when merging lots of files. */
 
 void usage()
 /* Explain usage and exit. */
 {
 errAbort(
-  "bigWigMerge - Merge together multiple bigWigs into a single output bedGraph.\n"
+  "bigWigMerge v2 - Merge together multiple bigWigs into a single output bedGraph.\n"
   "You'll have to run bedGraphToBigWig to make the output bigWig.\n"
   "The signal values are just added together to merge them\n"
   "usage:\n"
@@ -21,17 +27,20 @@ errAbort(
   "   -threshold=0.N - don't output values at or below this threshold. Default is 0.0\n"
   "   -adjust=0.N - add adjustment to each value\n"
   "   -clip=NNN.N - values higher than this are clipped to this value\n"
+  "   -inList - input file are lists of file names of bigWigs\n"
   );
 }
 
 double clThreshold = 0.0;
 double clAdjust = 0.0;
 double clClip = BIGDOUBLE;
+boolean clInList = FALSE;
 
 static struct optionSpec options[] = {
    {"threshold", OPTION_DOUBLE},
    {"adjust", OPTION_DOUBLE},
    {"clip", OPTION_DOUBLE},
+   {"inList", OPTION_BOOLEAN},
    {NULL, 0},
 };
 
@@ -105,6 +114,22 @@ for (i=1; i<size; ++i)
 return sameCount;
 }
 
+void addWigsInFile(char *fileName, struct bbiFile **pList)
+/* Treate  each non-empty non-sharp line of fileName as a bigWig file name
+ * and try to load the bigWig and add to list */
+{
+int i,count;
+char **words, *buf = NULL;
+readAllWords(fileName, &words ,&count, &buf);
+for (i=0; i<count; ++i)
+    {
+    struct bbiFile *inFile = bigWigFileOpen(words[i]);
+    slAddTail(pList, inFile);
+    }
+freeMem(words);
+freeMem(buf);
+}
+
 void bigWigMerge(int inCount, char *inFiles[], char *outFile)
 /* bigWigMerge - Merge together multiple bigWigs into a single one.. */
 {
@@ -113,8 +138,15 @@ struct bbiFile *inFile, *inFileList = NULL;
 int i;
 for (i=0; i<inCount; ++i)
     {
-    inFile = bigWigFileOpen(inFiles[i]);
-    slAddTail(&inFileList, inFile);
+    if (clInList)
+        {
+	addWigsInFile(inFiles[i], &inFileList);
+	}
+    else
+	{
+	inFile = bigWigFileOpen(inFiles[i]);
+	slAddTail(&inFileList, inFile);
+	}
     }
 
 FILE *f = mustOpen(outFile, "w");
@@ -184,7 +216,11 @@ optionInit(&argc, argv, options);
 clThreshold = optionDouble("threshold", clThreshold);
 clAdjust = optionDouble("adjust", clAdjust);
 clClip = optionDouble("clip", clClip);
-if (argc < 4)
+clInList = optionExists("inList");
+int minArgs = 4;
+if (clInList)
+    minArgs -= 1;
+if (argc < minArgs)
     usage();
 bigWigMerge(argc-2, argv+1, argv[argc-1]);
 return 0;

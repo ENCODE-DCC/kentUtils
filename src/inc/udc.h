@@ -100,6 +100,11 @@ bits64 udcCleanup(char *cacheDir, double maxDays, boolean testOnly);
  * no clean up is done, but the size of the files that would be
  * cleaned up is still. */
 
+void udcParseUrl(char *url, char **retProtocol, char **retAfterProtocol, char **retColon);
+/* Parse the URL into components that udc treats separately. 
+ * *retAfterProtocol is Q-encoded to keep special chars out of filenames.  
+ * Free all *ret's except *retColon when done. */
+
 void udcParseUrlFull(char *url, char **retProtocol, char **retAfterProtocol, char **retColon,
 		     char **retAuth);
 /* Parse the URL into components that udc treats separately.
@@ -148,9 +153,13 @@ boolean udcFastReadString(struct udcFile *f, char buf[256]);
 /* Read a string into buffer, which must be long enough
  * to hold it.  String is in 'writeString' format. */
 
-#ifdef PROGRESS_METER
-off_t remoteFileSize(char *url);
-/* fetch remote file size from given URL */
-#endif
+off_t udcFileSize(char *url);
+/* fetch remote or loca file size from given URL or path */
+
+boolean udcExists(char *url);
+/* return true if a remote or local file exists */
+
+boolean udcIsLocal(char *url);
+/* return true if url is not a http or ftp file, just a normal local file path */
 
 #endif /* UDC_H */

@@ -1,3 +1,6 @@
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 /* udc - url data cache - a caching system that keeps blocks of data fetched from URLs in
  * sparse local files for quick use the next time the data is needed. 
  *
@@ -529,6 +532,11 @@ if (fd < 0)
 /* Get status info from file. */
 struct stat status;
 fstat(fd, &status);
+if (status.st_size < udcBitmapHeaderSize) // check for truncated invalid bitmap files.
+    {
+    close(fd);
+    return NULL;  // returning NULL will cause the fresh creation of bitmap and sparseData files.
+    }  
 
 /* Read signature and decide if byte-swapping is needed. */
 // TODO: maybe buffer the I/O for performance?  Don't read past header - 
@@ -800,8 +808,6 @@ if (bits != NULL)
     if (retTime)
 	*retTime = bits->remoteUpdate;
     }
-else
-    warn("Can't open bitmap file %s: %s\n", bitmapFileName, strerror(errno));
 udcBitmapClose(&bits);
 return ret;
 }
@@ -1393,7 +1399,7 @@ return val;
 }
 
 char *udcReadLine(struct udcFile *file)
-/* Fetch next line from udc cache. */
+/* Fetch next line from udc cache or NULL. */
 {
 char shortBuf[2], *longBuf = NULL, *buf = shortBuf;
 int i, bufSize = sizeof(shortBuf);
@@ -1631,24 +1637,50 @@ if (sameString("transparent", udc->protocol))
 return udc->updateTime;
 }
 
-#ifdef PROGRESS_METER
-off_t remoteFileSize(char *url)
-/* fetch remote file size from given URL */
+off_t udcFileSize(char *url)
+/* fetch file size from given URL or local path 
+ * returns -1 if not found. */
 {
-off_t answer = 0;
+if (udcIsLocal(url))
+    return fileSize(url);
+
+// don't go to the network if we can avoid it
+int cacheSize = udcSizeFromCache(url, NULL);
+if (cacheSize!=-1)
+    return cacheSize;
+
+off_t ret = -1;
 struct udcRemoteFileInfo info;
 
 if (startsWith("http://",url) || startsWith("https://",url))
     {
     if (udcInfoViaHttp(url, &info))
-	answer = info.size;
+	ret = info.size;
     }
 else if (startsWith("ftp://",url))
     {
     if (udcInfoViaFtp(url, &info))
-	answer = info.size;
+	ret = info.size;
     }
+else
+    errAbort("udc/udcFileSize: invalid protocol for url %s, can only do http/https/ftp", url);
 
-return answer;
+return ret;
 }
-#endif
+
+boolean udcIsLocal(char *url) 
+/* return true if file is not a http or ftp file, just a local file */
+{
+// copied from above
+char *protocol = NULL, *afterProtocol = NULL, *colon;
+udcParseUrl(url, &protocol, &afterProtocol, &colon);
+freez(&protocol);
+freez(&afterProtocol);
+return colon==NULL;
+}
+
+boolean udcExists(char *url)
+/* return true if a local or remote file exists */
+{
+return udcFileSize(url)!=-1;
+}

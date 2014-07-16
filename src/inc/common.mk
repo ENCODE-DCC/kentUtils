@@ -6,6 +6,16 @@ endif
 ifeq (${CFLAGS},)
     CFLAGS=
 endif
+ifeq (${MACHTYPE},)
+    MACHTYPE:=$(shell uname -m)
+#    $(info MACHTYPE was empty, set to: ${MACHTYPE})
+endif
+ifneq (,$(findstring -,$(MACHTYPE)))
+#    $(info MACHTYPE has - sign ${MACHTYPE})
+    MACHTYPE:=$(shell uname -m)
+#    $(info MACHTYPE has - sign set to: ${MACHTYPE})
+endif
+
 HG_DEFS=-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_GNU_SOURCE -DMACHTYPE_${MACHTYPE}
 HG_INC=-I../inc -I../../inc -I../../../inc -I../../../../inc -I../../../../../inc
 
@@ -18,7 +28,9 @@ FULLWARN = $(shell uname -n)
 L=
 
 # pthreads is required
-L+=-pthread
+ifneq ($(UNAME_S),Darwin)
+  L+=-pthread
+endif
 
 # autodetect if openssl is installed
 ifeq (${SSLDIR},)
@@ -82,11 +94,22 @@ ifeq (${PNGLIB},)
   endif
 endif
 ifeq (${PNGLIB},)
+  ifneq ($(wildcard /usr/local/lib/libpng.a),)
+      PNGLIB=/usr/local/lib/libpng.a
+  endif
+endif
+ifeq (${PNGLIB},)
+      PNGLIB := $(shell libpng-config --ldflags  || true)
+endif
+ifeq (${PNGLIB},)
   PNGLIB=-lpng
 endif
 ifeq (${PNGINCL},)
   ifneq ($(wildcard /opt/local/include/png.h),)
       PNGINCL=-I/opt/local/include
+  else
+      PNGINCL := $(shell libpng-config --I_opts  || true)
+#       $(info using libpng-config to set PNGINCL: ${PNGINCL})
   endif
 endif
 
@@ -100,16 +123,16 @@ ifneq ($(MAKECMDGOALS),clean)
   endif
   # this does *not* work on Mac OSX with the dynamic libraries
   ifneq ($(UNAME_S),Darwin)
-    ifeq (${MYSQLINC},)
-      MYSQLINC := $(shell mysql_config --include | sed -e 's/-I//' || true)
-      #  $(info using mysql_config to set MYSQLINC: ${MYSQLINC})
-    endif
     ifeq (${MYSQLLIBS},)
       MYSQLLIBS := $(shell mysql_config --libs || true)
-      #  $(info using mysql_config to set MYSQLLIBS: ${MYSQLLIBS})
+#        $(info using mysql_config to set MYSQLLIBS: ${MYSQLLIBS})
     endif
   endif
 
+  ifeq (${MYSQLINC},)
+    MYSQLINC := $(shell mysql_config --include | sed -e 's/-I//' || true)
+#        $(info using mysql_config to set MYSQLINC: ${MYSQLINC})
+  endif
   ifeq (${MYSQLINC},)
     ifneq ($(wildcard /usr/local/mysql/include/mysql.h),)
 	  MYSQLINC=/usr/local/mysql/include
@@ -155,9 +178,19 @@ ifneq ($(MAKECMDGOALS),clean)
 	  MYSQLLIBS=/opt/local/lib/mysql55/mysql/libmysqlclient.a
     endif
   endif
+  ifeq (${MYSQLLIBS},)
+    ifneq ($(wildcard /usr/local/Cellar/mysql/5.6.19/lib/libmysqlclient.a),)
+	  MYSQLLIBS=/usr/local/Cellar/mysql/5.6.19/lib/libmysqlclient.a
+    endif
+  endif
+  ifeq (${MYSQLLIBS},)
+    ifneq ($(wildcard /usr/local/Cellar/mysql/5.6.16/lib/libmysqlclient.a),)
+	  MYSQLLIBS=/usr/local/Cellar/mysql/5.6.16/lib/libmysqlclient.a
+    endif
+  endif
   ifeq ($(findstring src/hg/,${CURDIR}),src/hg/)
-      ifeq (${MYSQLINC},)
-	$(error can not find installed mysql development system)
+    ifeq (${MYSQLINC},)
+        $(error can not find installed mysql development system)
     endif
   endif
     # last resort, hoping the compiler can find it in standard locations
@@ -197,6 +230,13 @@ ifeq (${SAMTABIXDIR},)
           USE_SAMTABIX=1
         endif
     endif
+endif
+
+# autodetect UCSC additional source code with password for some external tracks on gbib
+GBIBDIR = /hive/groups/browser/gbib/
+ifneq ($(wildcard ${GBIBDIR}/*.c),)
+  HG_DEFS+=-DUSE_GBIB_PWD
+  HG_INC += -I${GBIBDIR}
 endif
 
 # libsamtabix (samtools + tabix + Angie's KNETFILE_HOOKS extension to it): disabled by default
@@ -253,7 +293,7 @@ SYS = $(shell uname -s)
 
 ifeq (${HG_WARN},)
   ifeq (${SYS},Darwin)
-      HG_WARN = -Wall -Wno-unused-variable
+      HG_WARN = -Wall -Wno-unused-variable -Wno-deprecated-declarations
       HG_WARN_UNINIT=
   else
     ifeq (${SYS},SunOS)
@@ -261,7 +301,7 @@ ifeq (${HG_WARN},)
       HG_WARN_UNINIT=-Wuninitialized
     else
       ifeq (${FULLWARN},hgwdev)
-        HG_WARN = -Wall -Werror -Wformat -Wformat-security -Wimplicit -Wreturn-type
+        HG_WARN = -Wall -Werror -Wformat -Wformat-security -Wimplicit -Wreturn-type -Wempty-body
         HG_WARN_UNINIT=-Wuninitialized
       else
         HG_WARN = -Wall -Wformat -Wimplicit -Wreturn-type
@@ -295,7 +335,12 @@ ifeq (${ENCODE_PIPELINE_BIN},)
     ENCODE_PIPELINE_BIN=/cluster/data/encode/pipeline/bin
 endif
 
-DESTBINDIR=${DESTDIR}/${BINDIR}
+# avoid an extra leading slash when DESTDIR is empty
+ifeq (${DESTDIR},)
+  DESTBINDIR=${BINDIR}
+else
+  DESTBINDIR=${DESTDIR}/${BINDIR}
+endif
 
 # location of stringify program
 STRINGIFY = ${DESTBINDIR}/stringify
@@ -355,3 +400,7 @@ ENCODEDCC_DIR = ${PIPELINE_PATH}/downloads/encodeDCC
 %.o: %.c
 	${CC} ${COPT} ${CFLAGS} ${HG_DEFS} ${LOWELAB_DEFS} ${HG_WARN} ${HG_INC} ${XINC} -o $@ -c $<
 
+# jshint: off unless JSHINT is already in environment
+ifeq (${JSHINT},)
+    JSHINT=true
+endif

@@ -1,6 +1,9 @@
 /* edwLib - routines shared by various encodeDataWarehouse programs.    See also encodeDataWarehouse
  * module for tables and routines to access structs built on tables. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #ifndef EDWLIB_H
 #define EDWLIB_H
 
@@ -20,15 +23,24 @@
 
 extern char *edwDatabase;   /* Name of database we connect to. */
 extern char *edwRootDir;    /* Name of root directory for our files, including trailing '/' */
-extern char *edwLicensePlatePrefix; /* License plates start with this - thanks Mike Cherry. */
+extern char *eapRootDir;    /* Name of root directory for analysis pipeline */
 extern char *edwValDataDir; /* Data files we need for validation go here. */
+extern char *edwDaemonEmail; /* Email address of our automatic user. */
+
 extern int edwSingleFileTimeout;   // How many seconds we give ourselves to fetch a single file
+
+#define edwMinMapQual 3	//Above this -10log10 theshold we have >50% chance of being right
+
+#define EDW_WEB_REFRESH_5_SEC 5000
 
 struct sqlConnection *edwConnect();
 /* Returns a read only connection to database. */
 
 struct sqlConnection *edwConnectReadWrite();
 /* Returns read/write connection to database. */
+
+char *edwLicensePlatePrefix(struct sqlConnection *conn);
+/* Return license plate prefix for current database - something like TST or DEV or ENCFF */
 
 long long edwGotFile(struct sqlConnection *conn, char *submitDir, char *submitFileName, 
     char *md5, long long size);
@@ -79,6 +91,12 @@ struct edwUser *edwFindUserFromFileId(struct sqlConnection *conn, int fId);
 char *edwFindOwnerNameFromFileId(struct sqlConnection *conn, int fId);
 /* Return name of submitter. Return "an unknown user" if name is NULL */
 
+int edwFindUserIdFromEmail(struct sqlConnection *conn, char *userEmail);
+/* Return true id of this user */
+
+boolean edwUserIsAdmin(struct sqlConnection *conn, char *userEmail);
+/* Return true if the user is an admin */
+
 void edwWarnUnregisteredUser(char *email);
 /* Put up warning message about unregistered user and tell them how to register. */
 
@@ -109,6 +127,15 @@ void edwMakeFileNameAndPath(int edwFileId, char *submitFileName, char edwFile[PA
 /* Convert file id to local file name, and full file path. Make any directories needed
  * along serverPath. */
 
+char *edwSetting(struct sqlConnection *conn, char *name);
+/* Return named settings value,  or NULL if setting doesn't exist. */
+
+char *edwRequiredSetting(struct sqlConnection *conn, char *name);
+/* Returns setting, abort if it isn't found. */
+
+char *edwLicensePlateHead(struct sqlConnection *conn);
+/* Return license plate prefix for current database - something like TST or DEV or ENCFF */
+
 struct edwFile *edwGetLocalFile(struct sqlConnection *conn, char *localAbsolutePath, 
     char *symLinkMd5Sum);
 /* Get record of local file from database, adding it if it doesn't already exist.
@@ -125,6 +152,17 @@ struct edwFile *edwFileAllIntactBetween(struct sqlConnection *conn, int startId,
 struct edwValidFile *edwValidFileFromFileId(struct sqlConnection *conn, long long fileId);
 /* Return edwValidFile give fileId - returns NULL if not validated. */
 
+void edwValidFileUpdateDb(struct sqlConnection *conn, struct edwValidFile *el, long long id);
+/* Save edwValidFile as a row to the table specified by tableName, replacing existing record at 
+ * id. */
+
+struct cgiParsedVars;   // Forward declare this so don't have to include cheapcgi
+void edwValidFileFieldsFromTags(struct edwValidFile *vf, struct cgiParsedVars *tags);
+/* Fill in many of vf's fields from tags. */
+
+struct edwExperiment *edwExperimentFromAccession(struct sqlConnection *conn, char *acc); 
+/* Given something like 'ENCSR123ABC' return associated experiment. */
+
 struct edwFile *edwFileFromId(struct sqlConnection *conn, long long fileId);
 /* Return edwFile given fileId - return NULL if not found. */
 
@@ -136,6 +174,12 @@ struct genomeRangeTree *edwMakeGrtFromBed3List(struct bed3 *bedList);
 
 struct edwAssembly *edwAssemblyForUcscDb(struct sqlConnection *conn, char *ucscDb);
 /* Get assembly for given UCSC ID or die trying */
+
+struct edwAssembly *edwAssemblyForId(struct sqlConnection *conn, long long id);
+/* Get assembly of given ID. */
+
+char *edwSimpleAssemblyName(char *assembly);
+/* Given compound name like male.hg19 return just hg19 */
 
 struct genomeRangeTree *edwGrtFromBigBed(char *fileName);
 /* Return genome range tree for simple (unblocked) bed */
@@ -155,6 +199,9 @@ void edwAddJob(struct sqlConnection *conn, char *command);
 void edwAddQaJob(struct sqlConnection *conn, long long fileId);
 /* Create job to do QA on this and add to queue */
 
+struct edwSubmit *edwSubmitFromId(struct sqlConnection *conn, long long id);
+/* Return submission with given ID or NULL if no such submission. */
+
 struct edwSubmit *edwMostRecentSubmission(struct sqlConnection *conn, char *url);
 /* Return most recent submission, possibly in progress, from this url */
 
@@ -164,6 +211,10 @@ long long edwSubmitMaxStartTime(struct edwSubmit *submit, struct sqlConnection *
 
 int edwSubmitCountNewValid(struct edwSubmit *submit, struct sqlConnection *conn);
 /* Count number of new files in submission that have been validated. */
+
+boolean edwSubmitIsValidated(struct edwSubmit *submit, struct sqlConnection *conn);
+/* Return TRUE if validation has run.  This does not mean that they all passed validation.
+ * It just means the validator has run and has made a decision on each file in the submission. */
 
 void edwAddSubmitJob(struct sqlConnection *conn, char *userEmail, char *url, boolean update);
 /* Add submission job to table and wake up daemon.  If update is set allow submission to
@@ -211,8 +262,10 @@ struct edwFile *edwFileInProgress(struct sqlConnection *conn, int submitId);
 struct edwScriptRegistry *edwScriptRegistryFromCgi();
 /* Get script registery from cgi variables.  Does authentication too. */
 
-void edwFileResetTags(struct sqlConnection *conn, struct edwFile *ef, char *newTags);
-/* Reset tags on file, strip out old validation and QA,  schedule new validation and QA. */
+void edwFileResetTags(struct sqlConnection *conn, struct edwFile *ef, char *newTags,
+    boolean revalidate);
+/* Reset tags on file, strip out old validation and QA,  optionally schedule new validation 
+ * and QA. */
 
 #define edwSampleTargetSize 250000  /* We target this many samples */
 
@@ -220,9 +273,17 @@ void edwReserveTempFile(char *path);
 /* Call mkstemp on path.  This will fill in terminal XXXXXX in path with file name
  * and create an empty file of that name.  Generally that empty file doesn't stay empty for long. */
 
+void edwBwaIndexPath(struct edwAssembly *assembly, char indexPath[PATH_LEN]);
+/* Fill in path to BWA index. */
+
+void edwAsPath(char *format, char path[PATH_LEN]);
+/* Convert something like "narrowPeak" in format to fill path involving
+ * encValDir/as/narrowPeak.as */
+
 void edwAlignFastqMakeBed(struct edwFile *ef, struct edwAssembly *assembly,
     char *fastqPath, struct edwValidFile *vf, FILE *bedF,
-    double *retMapRatio,  double *retDepth,  double *retSampleCoverage);
+    double *retMapRatio,  double *retDepth,  double *retSampleCoverage,
+    double *retUniqueMapRatio);
 /* Take a sample fastq and run bwa on it, and then convert that file to a bed. */
 
 void edwMakeTempFastqSample(char *source, int size, char dest[PATH_LEN]);
@@ -233,5 +294,76 @@ void edwMakeFastqStatsAndSample(struct sqlConnection *conn, long long fileId);
 
 struct edwFastqFile *edwFastqFileFromFileId(struct sqlConnection *conn, long long fileId);
 /* Get edwFastqFile with given fileId or NULL if none such */
+
+struct edwBamFile * edwMakeBamStatsAndSample(struct sqlConnection *conn, long long fileId, 
+    char sampleBed[PATH_LEN]);
+/* Run edwBamStats and put results into edwBamFile table, and also a sample bed.
+ * The sampleBed will be filled in by this routine. */
+
+struct edwBamFile *edwBamFileFromFileId(struct sqlConnection *conn, long long fileId);
+/* Get edwBamFile with given fileId or NULL if none such */
+
+struct edwQaWigSpot *edwMakeWigSpot(struct sqlConnection *conn, long long wigId, long long spotId);
+/* Create a new edwQaWigSpot record in database based on comparing wig file to spot file
+ * (specified by id's in edwFile table). */
+
+struct edwQaWigSpot *edwQaWigSpotFor(struct sqlConnection *conn, 
+    long long wigFileId, long long spotFileId);
+/* Return wigSpot relationship if any we have in database for these two files. */
+
+char *edwOppositePairedEndString(char *end);
+/* Return "1" for "2" and vice versa */
+
+struct edwValidFile *edwOppositePairedEnd(struct sqlConnection *conn, struct edwValidFile *vf);
+/* Given one file of a paired end set of fastqs, find the file with opposite ends. */
+
+struct edwQaPairedEndFastq *edwQaPairedEndFastqFromVfs(struct sqlConnection *conn,
+    struct edwValidFile *vfA, struct edwValidFile *vfB,
+    struct edwValidFile **retVf1,  struct edwValidFile **retVf2);
+/* Return pair record if any for the two fastq files. */
+
+void edwMd5File(char *fileName, char md5Hex[33]);
+/* call md5sum utility to calculate md5 for file and put result in hex format md5Hex 
+ * This ends up being about 30% faster than library routine md5HexForFile,
+ * however since there's popen() weird interactions with  stdin involved
+ * it's not suitable for a general purpose library.  Environment inside edw
+ * is controlled enough it should be ok. */
+
+void edwPathForCommand(char *command, char path[PATH_LEN]);
+/* Figure out path associated with command */
+
+void edwPokeFifo(char *fifoName);
+/* Send '\n' to fifo to wake up associated daemon */
+
+FILE *edwPopen(char *command, char *mode);
+/* do popen or die trying */
+
+void edwOneLineSystemResult(char *command, char *line, int maxLineSize);
+/* Execute system command and return one line result from it in line */
+
+boolean edwOneLineSystemAttempt(char *command, char *line, int maxLineSize);
+/* Execute system command and return one line result from it in line */
+
+/***/
+/* Shared functions for EDW web CGI's.
+   Mostly wrappers for javascript tweaks */
+
+void edwWebAutoRefresh(int msec);
+/* Refresh page after msec.  Use 0 to cancel autorefresh */
+
+/***/
+/* Navigation bar */
+
+void edwWebNavBarStart();
+/* Layout navigation bar */
+
+void edwWebNavBarEnd();
+/* Close layout after navigation bar */
+
+void edwWebBrowseMenuItem(boolean on);
+/* Toggle visibility of 'Browse submissions' link on navigation menu */
+
+void edwWebSubmitMenuItem(boolean on);
+/* Toggle visibility of 'Submit data' link on navigation menu */
 
 #endif /* EDWLIB_H */

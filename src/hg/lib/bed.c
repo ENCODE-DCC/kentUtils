@@ -2,6 +2,9 @@
  * generated bed.h and bed.sql.  This module links the database and the RAM 
  * representation of objects. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 
 #include "common.h"
 #include "bed.h"
@@ -56,8 +59,7 @@ struct bed *bed;
 int i, blockCount, *chromStarts, *blockSizes, chromStart;
 
 /* A tiny bit of error checking on the genePred. */
-if (genePred->txStart >= genePred->txEnd || genePred->cdsStart > genePred->cdsEnd
-    || genePred->exonCount < 0 )
+if (genePred->txStart >= genePred->txEnd || genePred->cdsStart > genePred->cdsEnd)
     {
     errAbort("mangled genePred format for %s", genePred->name);
     }

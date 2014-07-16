@@ -1,18 +1,22 @@
 /* udcTest -- test the URL data cache */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 // suggestions from Mark: 1. try setvbuf, to make FILE * unbuffered -- does that help?
 //                        2. *if* need to do own buffering, consider mmap()
 //                           (kernel handles buffering)
 
 #include <sys/wait.h>
 #include "common.h"
-#include "errabort.h"
+#include "errAbort.h"
 #include "options.h"
 #include "portable.h"
 #include "udc.h"
 
 
 static struct optionSpec options[] = {
+    {"size",    OPTION_BOOLEAN},
     {"raBuf",    OPTION_BOOLEAN},
     {"fork",     OPTION_BOOLEAN},
     {"protocol", OPTION_STRING},
@@ -24,6 +28,7 @@ boolean raBuf = FALSE;   /* exercise the read-ahead buffer */
 boolean doFork = FALSE;
 char *protocol = "ftp";
 unsigned int seed = 0;
+int size = 0;
 
 // Local copy (reference file) and URL for testing:
 #define THOUSAND_HIVE "/hive/data/outside/1000genomes/ncbi/ftp-trace.ncbi.nih.gov/1000genomes/"
@@ -288,6 +293,12 @@ udcFileClose(&udcf);
 return gotError;
 
 }
+
+bool testSize(char *url, long int  size) 
+{
+return (udcFileSize(url)==size)   ;
+}
+
 boolean testReadAheadBuffer(char *url, char *localCopy)
 /* Open a udcFile, read different random locations, and check for errors. */
 {
@@ -410,6 +421,7 @@ int main(int argc, char *argv[])
 {
 boolean gotError = FALSE;
 optionInit(&argc, argv, options);
+size = optionExists("size");
 raBuf = optionExists("raBuf");
 doFork = optionExists("fork");
 protocol = optionVal("protocol", protocol);
@@ -442,7 +454,9 @@ if (sameString(protocol, "http"))
     {
     char *httpUrl = "http://hgwdev.cse.ucsc.edu/~angie/wgEncodeCshlRnaSeqAlignmentsK562ChromatinShort.bb";
     char *httpLocalCopy = "/gbdb/hg18/bbi/wgEncodeCshlRnaSeqAlignmentsK562ChromatinShort.bb";
-    if (raBuf)
+    if (size)
+	gotError |= testSize(httpUrl, fileSize(httpLocalCopy));
+    else if (raBuf)
 	gotError |= testReadAheadBuffer(httpUrl, httpLocalCopy);
     else if (doFork)
 	gotError |= testConcurrent(httpUrl, httpLocalCopy);

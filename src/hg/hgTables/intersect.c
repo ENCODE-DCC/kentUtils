@@ -1,5 +1,8 @@
 /* intersect - handle intersecting beds. */
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -37,7 +40,7 @@ static char *nextVars[] = {hgtaNextIntersectGroup, hgtaNextIntersectTrack,
  * libified, probably in cart.h. */
 void removeCartVars(struct cart *cart, char **vars, int varCount);
 
-static boolean canIntersect(char *db, char *table)
+boolean canIntersect(char *db, char *table)
 /* Return true if table exists and is positional. */
 {
 if (isCustomTrack(table) && ctLookupName(table) != NULL)
@@ -47,6 +50,8 @@ if (isBamTable(table))
 if (isBigWigTable(table))
     return TRUE;
 if (isBigBed(database, table, curTrack, ctLookupName))
+    return TRUE;
+if (isVcfTable(table, NULL))
     return TRUE;
 if (isHubTrack(table))
     return TRUE;
@@ -366,7 +371,7 @@ static int countBasesOverlap(struct bed *bedItem, Bits *bits, boolean hasBlocks,
 int count = 0;
 int i;
 
-if (bedItem->chromStart < 0 || bedItem->chromEnd > chromSize)
+if (bedItem->chromEnd > chromSize)
     errAbort("Item out of range [0,%d): %s %s:%d-%d",
 	     chromSize, (bedItem->name ? bedItem->name : ""),
 	     bedItem->chrom, bedItem->chromStart, bedItem->chromEnd);

@@ -1,5 +1,8 @@
 // Search code which is shared between different CGIs: hgFileSearch and hgTracks(Track Search)
 
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "search.h"
 #include "cheapcgi.h"
 #include "hdb.h"
@@ -16,6 +19,9 @@ void getSearchTrixFile(char *database, char *buf, int len)
 char *trixPath = cfgOptionDefault("browser.trixPath", "/gbdb/$db/trackDb.ix");
 struct subText *subList = subTextNew("$db", database);
 subTextStatic(subList, trixPath, buf, len);
+char *subBuf = hReplaceGbdb(buf);
+safecpy(buf, len, subBuf);
+freez(&subBuf);
 }
 
 boolean isSearchTracksSupported(char *database, struct cart *cart)
@@ -23,7 +29,10 @@ boolean isSearchTracksSupported(char *database, struct cart *cart)
 {
 char trixFile[HDB_MAX_PATH_STRING];
 getSearchTrixFile(database, trixFile, sizeof(trixFile));
-return fileExists(trixFile);
+char *trixPath = hReplaceGbdb(trixFile);
+bool ret = udcExists(trixPath);
+freez(&trixPath);
+return ret;
 }
 
 struct slPair *fileFormatSearchWhiteList()

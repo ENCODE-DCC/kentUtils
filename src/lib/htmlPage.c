@@ -1,3 +1,6 @@
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 /* htmlPage - stuff to read, parse, and submit  htmlPages and forms. 
  *
  * typical usage is:
@@ -11,7 +14,7 @@
  */
 
 #include "common.h"
-#include "errabort.h"
+#include "errAbort.h"
 #include "errCatch.h"
 #include "memalloc.h"
 #include "linefile.h"
@@ -678,6 +681,15 @@ return sameWord(type, "BUTTON") || sameWord(type, "SUBMIT")
 	|| sameWord(type, "IMAGE");
 }
 
+static boolean areMixableInputTypes(char *type1, char *type2)
+/* Return TRUE if type1 and type 2 can be safely mixed, i.e.
+ * if type1 and type2 both pass isMixableInputType, OR
+ * if type1 or type2 is HIDDEN. */
+{
+return sameWord(type1, "HIDDEN") || sameWord(type2, "HIDDEN")
+    || (isMixableInputType(type1) && isMixableInputType(type2));
+}
+
 static void htmlFormVarAddValue(struct htmlFormVar *var, char *value)
 /* Add value to list of predefined values for var. */
 {
@@ -718,7 +730,7 @@ for (tag = form->startTag->next; tag != form->endTag; tag = tag->next)
 	var = findOrMakeVar(page, varName, hash, tag, &varList); 
 	if (var->type != NULL && !sameWord(var->type, type))
 	    {
-	    if (!isMixableInputType(var->type) || !isMixableInputType(type))
+	    if (!areMixableInputTypes(var->type, type))
 		tagWarn(page, tag, "Mixing input types %s and %s", var->type, type);
 	    }
 	var->type = type;
@@ -1098,34 +1110,15 @@ for (i=0; i<inLength;++i)
 }
 
 
-char *htmlExpandUrl(char *base, char *url)
-/* Expand URL that is relative to base to stand on its own. 
- * Return NULL if it's not http or https. */
+char *expandUrlOnBase(char *base, char *url)
+/* Figure out first character past host name. Load up
+ * return string with protocol (if any) and host name. 
+ * It is assumed that url is relative to base and does not contain a protocol.*/
 {
 struct dyString *dy = NULL;
 char *hostName, *pastHostName;
-
-/* some mailto: have SGML char encoding, e.g &#97; to hide from spambots */
-url = cloneString(url);	/* Clone because asciiEntityDecode may modify it. */
-asciiEntityDecode(url, url, strlen(url));
-
-/* In easiest case URL is actually absolute and begins with
- * protocol.  Just return clone of url. */
-if (startsWith("http:", url) || startsWith("https:", url))
-    return url;
-
-/* If it's got a colon, but no http or https, then it's some
- * protocol we don't understand, like a mailto.  Just return NULL. */
-if (strchr(url, ':') != NULL)
-    {
-    freez(&url);
-    return NULL;
-    }
-
-/* Figure out first character past host name. Load up
- * return string with protocol (if any) and host name. */
 dy = dyStringNew(256);
-if (startsWith("http:", base) || startsWith("https:", base))
+if (startsWith("http:", base) || startsWith("https:", base) || startsWith("ftp:", base))
     hostName = (strchr(base, ':') + 3);
 else
     hostName = base;
@@ -1168,8 +1161,33 @@ else
 	dyStringAppend(dy, url);
 	}
     }
-freez(&url);
 return dyStringCannibalize(&dy);
+}
+
+char *htmlExpandUrl(char *base, char *url)
+/* Expand URL that is relative to base to stand on its own. 
+ * Return NULL if it's not http or https. */
+{
+
+/* some mailto: have SGML char encoding, e.g &#97; to hide from spambots */
+url = cloneString(url);	/* Clone because asciiEntityDecode may modify it. */
+asciiEntityDecode(url, url, strlen(url));
+
+/* In easiest case URL is actually absolute and begins with
+ * protocol.  Just return clone of url. */
+if (startsWith("http:", url) || startsWith("https:", url))
+    return url;
+
+/* If it's got a colon, but no http or https, then it's some
+ * protocol we don't understand, like a mailto.  Just return NULL. */
+if (strchr(url, ':') != NULL)
+    {
+    freez(&url);
+    return NULL;
+    }
+char *result = expandUrlOnBase(base, url);
+freez(&url);
+return result;
 }
 
 static void appendCgiVar(struct dyString *dy, char *name, char *value)

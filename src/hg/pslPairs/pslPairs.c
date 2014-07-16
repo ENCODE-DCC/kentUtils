@@ -6,6 +6,9 @@
   Description: Create end sequence pairs from psl files
 */
 
+/* Copyright (C) 2011 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 #include "common.h"
 #include "linefile.h"
 #include "memalloc.h"
@@ -93,7 +96,7 @@ FILE *of, *orf, *sf, *mf, *esf, *elf;
 
 struct cloneName
 {
-  char name[32];
+  char name[128];
 };
 
 struct pslAli
@@ -119,7 +122,7 @@ struct pslPair
 struct clone
 {
   struct clone *next;
-  char name[32];
+  char name[128];
   struct pslAli *end1;
   struct pslAli *end2;
   struct pslPair *pairs;
@@ -175,6 +178,7 @@ void pslPairListFree(struct pslPair **pList)
 
 void cloneFree(struct clone **c)
 {
+  return;
   struct clone *el;
 
   if ((el = *c) == NULL) return;

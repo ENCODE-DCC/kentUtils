@@ -20,7 +20,9 @@ SCRIPT_FILES = \
 	blastz-normalizeLav \
 	blastz-run-ucsc \
 	doBlastzChainNet.pl \
+	doCpgIslands.pl \
 	doEnsGeneUpdate.pl \
+	doGenscan.pl \
 	doHgNearBlastp.pl \
 	ensemblInfo.pl \
 	synBlastp.csh \

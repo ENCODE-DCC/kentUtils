@@ -1,4 +1,7 @@
 /* gapToLift - create lift file from gap table(s). */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
@@ -88,9 +91,6 @@ struct agpGap *gap;
 for (gap = gapList; gap; gap = gap->next)
     {
     int chrSize = hashIntVal(cInfoHash, gap->chrom);
-    if (gap->chromStart < 0)
-	verbose(1, "WARNING: gap chromStart < 0 at %s:%d-%d\n",
-		gap->chrom, gap->chromStart, gap->chromEnd);
     if (gap->chromEnd > chrSize)
 	verbose(1, "WARNING: gap chromEnd > chromSize(%d) "
 	    "at %s:%d-%d\n", chrSize, gap->chrom,

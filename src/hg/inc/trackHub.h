@@ -1,3 +1,6 @@
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 /* trackHub - supports collections of tracks hosted on a remote site.
  * The basic layout of a data hub is:
  *        hub.ra - contains information about the hub itself
@@ -33,8 +36,11 @@ struct trackHub
     char *shortLabel;	/* Hub short label. Not allocated here. */
     char *longLabel;	/* Hub long label. Not allocated here. */
     char *genomesFile;	/* URL to genome.ra file. Not allocated here. */
+    char *defaultDb;    /* the default database  */
 
     char *name;	/* Symbolic name of hub in cart, etc.  From trackHubOpen hubName parameter. */
+
+    char *descriptionUrl;  /* URL to description file */
     };
 
 struct trackHubGenome
@@ -90,12 +96,14 @@ char *trackHubRelativeUrl(char *hubUrl, char *path);
 void trackHubGenomeFree(struct trackHubGenome **pGenome);
 /* Free up genome info. */
 
-void trackHubGenomeFreeList(struct trackHubGenome **pList);
+void trackHubGenomeFreeList(struct trackHub *hub);
 /* Free a list of dynamically allocated trackHubGenome's. */
 
-int trackHubCheck(char *hubUrl, struct dyString *errors, boolean checkTracks);
+int trackHubCheck(char *hubUrl, struct dyString *errors, 
+    boolean checkTracks, FILE *searchFp);
 /* trackHubCheck - Check a track data hub for integrity. Put errors in dyString.
  *      if checkTracks is TRUE, individual tracks are checked
+ *      if searchFp is non-null, then put search terms in there
  *      return 0 if hub has no errors, 1 otherwise */
 
 void trackHubPolishTrackNames(struct trackHub *hub, struct trackDb *tdbList);
@@ -133,7 +141,7 @@ struct chromInfo *trackHubChromInfo(char *database, char *chrom);
 char *trackHubGenomeNameToDb(char *genome);
 /* Return assembly name given a genome name if one exists, otherwise NULL. */
 
-struct dbDb *trackHubGetDbDbs();
+struct dbDb *trackHubGetDbDbs(char *clade);
 /* Get a list of dbDb structures for all the tracks in this clade/hub. */
 
 struct slPair *trackHubGetCladeLabels();
@@ -158,5 +166,16 @@ struct dbDb *trackHubDbDbFromAssemblyDb(char *database);
 struct hgPositions;
 void trackHubFindPos(char *db, char *term, struct hgPositions *hgp);
 /* Look for term in track hubs.  Update hgp if found */
+
+void trackHubAddDescription(char *trackDbFile, struct trackDb *tdb);
+/* Fetch tdb->track's html description (or nearest ancestor's non-empty description)
+ * and store in tdb->html. */
+
+struct trackHubGenome *trackHubGetGenome(char *database);
+/* get genome structure for an assembly in a trackHub */
+
+boolean trackHubGetBlatParams(char *database, boolean isTrans, char **pHost,
+    char **pPort);
+/* get "blat" and "transBlat" entries (if any) for an assembly hub */
 #endif /* TRACKHUB_H */
 

@@ -1,10 +1,13 @@
 /* edwWebRegisterScript - Create a user ID for a script, since scripts have a hard time with Persona.. */
+
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
 #include <uuid/uuid.h>
 #include "common.h"
 #include "linefile.h"
 #include "hash.h"
 #include "options.h"
-#include "errabort.h"
+#include "errAbort.h"
 #include "jksql.h"
 #include "hex.h"
 #include "cheapcgi.h"
@@ -117,9 +120,12 @@ else if (cgiVarExists("description"))
 	       babyName, password,
 	       cgiEncode("http://your.host.edu/your_dir/validated.txt"));
 	puts("That is pass the CGI encoded variables user, password, and url to the ");
-	puts("web services CGI at");
-	puts("https://encodedcc.sdsc.edu/cgi-bin/edwScriptSubmit. ");
-	puts("You can use the http://encodedcc.sdsc.edu/cgi-bin/edwWebBrowse site to ");
+	puts("web services CGI at:<BR>");
+	puts("<PRE>  https://encodedcc.sdsc.edu/cgi-bin/edwScriptSubmit\n</PRE> ");
+	puts("You can monitor the status of the submission programmatically by passing<BR>");
+	puts("the same user, password, and url variables to:<BR>");
+	puts("<PRE>  https://encodedcc.sdsc.edu/cgi-bin/edwScriptSubmitStatus\n</PRE> ");
+	puts("You can also use the http://encodedcc.sdsc.edu/cgi-bin/edwWebBrowse site to ");
 	puts("monitor your submission interactively. Please contact your wrangler if you ");
 	puts("have any questions.<BR>");
 	cgiMakeButton("submit", "Register another script");

@@ -11,7 +11,7 @@
  * granted for all use - public, private or commercial. */
 
 #include "common.h"
-#include "errabort.h"
+#include "errAbort.h"
 #include "linefile.h"
 #include "obscure.h"
 #include "dystring.h"
@@ -79,7 +79,9 @@ else
 	    char *defaultVal = "";
 	    if (!col->isList && !col->isArray)
 		{
-		if (col->lowType->stringy)
+		if (col->lowType->type == t_char && col->fixedSize != 0)
+		    defaultVal = " default ''";
+		else if (col->lowType->stringy)
 		    {
 		    if (col->lowType->type == t_string)
 			defaultVal = " default ''";

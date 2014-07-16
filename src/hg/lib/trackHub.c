@@ -1,3 +1,6 @@
+/* Copyright (C) 2014 The Regents of the University of California 
+ * See README in this or parent directory for licensing information. */
+
 /* trackHub - supports collections of tracks hosted on a remote site.
  * The basic layout of a data hub is:
  *        hub.txt - contains information about the hub itself
@@ -41,11 +44,14 @@
 #include "hubConnect.h"
 #include "trix.h"
 #include "vcf.h"
+#include "htmshell.h"
+#include "bigBedFind.h"
 
 static struct hash *hubCladeHash;  // mapping of clade name to hub pointer
 static struct hash *hubAssemblyHash; // mapping of assembly name to genome struct
 static struct hash *hubOrgHash;   // mapping from organism name to hub pointer
-struct trackHub *globalAssemblyHubList; // list of trackHubs in the user's cart
+static struct trackHub *globalAssemblyHubList; // list of trackHubs in the user's cart
+static struct hash *trackHubHash;
 
 char *trackHubRelativeUrl(char *hubUrl, char *path)
 /* Return full path (in URL form if it's a remote hub) given
@@ -58,7 +64,7 @@ if (hasProtocol(path))
 
 /* If it's a remote hub, let html path expander handle it. */
 if (hasProtocol(hubUrl))
-    return htmlExpandUrl(hubUrl, path);
+    return expandUrlOnBase(hubUrl, path);
 
 /* If we got to here hub is local, and so is path.  Do standard
  * path parsing. */
@@ -68,7 +74,7 @@ return pathRelativeToFile(hubUrl, path);
 static void badGenomeStanza(struct lineFile *lf)
 /* Put up semi-informative error message about a genome stanza being bad. */
 {
-errAbort("Genome stanza should have exactly two lines, one with 'genome' and one with 'trackDb'\n"
+errAbort("Genome stanza should have at least two lines, one with 'genome' and one with 'trackDb'\n"
          "Bad stanza format ending line %d of %s", lf->lineIx, lf->fileName);
 }
 
@@ -133,7 +139,10 @@ db->genome = cloneString(hubGenome->organism);
 db->organism = cloneString(hubGenome->organism);
 db->name = cloneString(hubGenome->name);
 db->active = TRUE;
-db->description = cloneString(hubGenome->description);
+if (hubGenome->description != NULL)
+    db->description = cloneString(hubGenome->description);
+else
+    db->description = cloneString("");
 char *orderKey = hashFindVal(hubGenome->settingsHash, "orderKey");
 if (orderKey != NULL)
     db->orderKey = sqlUnsigned(orderKey);
@@ -376,11 +385,21 @@ if ((hubOrgHash != NULL) && (hel = hashLookup(hubOrgHash, genome)) != NULL)
 return NULL;
 }
 
+static void deleteAssembly(char *name, struct trackHubGenome *genome, struct trackHub *hub)
+/* delete this assembly from the assembly caches */
+{
+hashRemove(hubCladeHash, hub->name);
+slRemoveEl(&globalAssemblyHubList, hub);
+
+hashRemove(hubOrgHash, genome->organism);
+
+hashRemove(hubAssemblyHash, genome->name);
+}
+
 static void addAssembly(char *name, struct trackHubGenome *genome, struct trackHub *hub)
 /* Add a new assembly hub database to our global list. */
 {
 struct hashEl *hel;
-
 
 if (hubCladeHash == NULL)
     hubCladeHash = newHash(5);
@@ -432,6 +451,8 @@ while ((ra = raNextRecord(lf)) != NULL)
 	genome = addHubName(hashFindVal(ra, "genome"), hub->name);
     else
 	genome = hashFindVal(ra, "genome");
+    if (hub->defaultDb == NULL)
+	hub->defaultDb = genome;
     if (genome == NULL)
         badGenomeStanza(lf);
     if (hashLookup(hash, genome) != NULL)
@@ -495,10 +516,42 @@ if (val == NULL)
 return val;
 }
 
+static struct trackHub *grabHashedHub(char *hubName)
+/* see if a trackHub with this name is in the cache */
+{
+if ( trackHubHash == NULL)
+    trackHubHash = newHash(5);
+
+return  (struct trackHub *)hashFindVal(trackHubHash, hubName); 
+}
+
+static void cacheHub(struct trackHub *hub)
+{
+/* put this trackHub in the trackHub hash */
+if ( trackHubHash == NULL)
+    trackHubHash = newHash(5);
+
+hashAdd(trackHubHash, hub->name, hub);
+}
+
+void uncacheHub(struct trackHub *hub)
+/* take this trackHub out of the trackHub hash */
+{
+if ( trackHubHash == NULL)
+    return;
+
+hashMustRemove(trackHubHash, hub->name);
+}
+
 struct trackHub *trackHubOpen(char *url, char *hubName)
 /* Open up a track hub from url.  Reads and parses hub.txt and the genomesFile. 
  * The hubName is generally just the asciified ID number. */
 {
+struct trackHub *hub = grabHashedHub(hubName);
+
+if (hub != NULL)
+    return hub;
+
 struct lineFile *lf = udcWrapShortLineFile(url, NULL, 256*1024);
 struct hash *hubRa = raNextRecord(lf);
 if (hubRa == NULL)
@@ -507,7 +560,6 @@ if (raNextRecord(lf) != NULL)
     errAbort("multiple records in %s", url);
 
 /* Allocate hub and fill in settings field and url. */
-struct trackHub *hub;
 AllocVar(hub);
 hub->url = cloneString(url);
 hub->name = cloneString(hubName);
@@ -519,18 +571,18 @@ trackHubRequiredSetting(hub, "email");
 hub->shortLabel = trackHubRequiredSetting(hub, "shortLabel");
 hub->longLabel = trackHubRequiredSetting(hub, "longLabel");
 hub->genomesFile = trackHubRequiredSetting(hub, "genomesFile");
+char *descriptionUrl = trackHubSetting(hub, "descriptionUrl");
+if (descriptionUrl != NULL)
+    hub->descriptionUrl = trackHubRelativeUrl(hub->url, descriptionUrl);
 
 lineFileClose(&lf);
 char *genomesUrl = trackHubRelativeUrl(hub->url, hub->genomesFile);
-
-if (genomesUrl == NULL)
-    errAbort("badly formatted genomesFile setting (%s) in hub %s\n", 
-	    hub->genomesFile, hub->url);
 
 hub->genomeHash = hashNew(8);
 hub->genomeList = trackHubGenomeReadRa(genomesUrl, hub);
 freez(&genomesUrl);
 
+cacheHub(hub);
 return hub;
 }
 
@@ -540,10 +592,11 @@ void trackHubClose(struct trackHub **pHub)
 struct trackHub *hub = *pHub;
 if (hub != NULL)
     {
-    trackHubGenomeFreeList(&hub->genomeList);
+    trackHubGenomeFreeList(hub);
     freeMem(hub->url);
     hashFree(&hub->settings);
     hashFree(&hub->genomeHash);
+    uncacheHub(hub);
     freez(pHub);
     }
 }
@@ -560,17 +613,19 @@ if (genome != NULL)
     }
 }
 
-void trackHubGenomeFreeList(struct trackHubGenome **pList)
+void trackHubGenomeFreeList(struct trackHub *hub)
 /* Free a list of dynamically allocated trackHubGenome's */
 {
 struct trackHubGenome *el, *next;
 
-for (el = *pList; el != NULL; el = next)
+for (el = hub->genomeList; el != NULL; el = next)
     {
     next = el->next;
+    if (el->twoBitPath != NULL)
+	deleteAssembly(el->name, el, hub);
     trackHubGenomeFree(&el);
     }
-*pList = NULL;
+hub->genomeList = NULL;
 }
 
 static char *requiredSetting(struct trackHub *hub, struct trackHubGenome *genome,
@@ -583,6 +638,15 @@ if (val == NULL)
     errAbort("Missing required '%s' setting in hub %s genome %s track %s", setting,
     	hub->url, genome->name, tdb->track);
 return val;
+}
+
+static void forbidSetting(struct trackHub *hub, struct trackHubGenome *genome,
+    struct trackDb *tdb, char *setting)
+/* Abort if forbidden setting found. */
+{
+if (trackDbSetting(tdb, setting))
+    errAbort("Forbidden setting '%s' in hub %s genome %s track %s", setting,
+        hub->url, genome->name, tdb->track);
 }
 
 static void expandBigDataUrl(struct trackHub *hub, struct trackHubGenome *genome,
@@ -620,6 +684,9 @@ static void validateOneTrack( struct trackHub *hub,
 /* Check for existence of fields required in all tracks */
 requiredSetting(hub, genome, tdb, "shortLabel");
 requiredSetting(hub, genome, tdb, "longLabel");
+
+/* Forbid any dangerous settings that should not be allowed */
+forbidSetting(hub, genome, tdb, "idInUrlSql");
 
 // subtracks is not NULL if a track said we were its parent
 if (tdb->subtracks != NULL)
@@ -737,7 +804,8 @@ for (tdb = tdbList; tdb != NULL; tdb = tdb->next)
 validateTracks(hub, genome, tdbList);
 
 trackDbAddTableField(tdbList);
-trackHubAddNamePrefix(hub->name, tdbList);
+if (!isEmpty(hub->name))
+    trackHubAddNamePrefix(hub->name, tdbList);
 if (genome->twoBitPath == NULL)
     trackHubAddGroupName(hub->name, tdbList);
 for (tdb = tdbList; tdb != NULL; tdb = tdb->next)
@@ -807,63 +875,39 @@ for (tdb = tdbList; tdb != NULL; tdb = tdb->next)
     }
 }
 
-static int hubCheckTrack(struct trackHub *hub, struct trackHubGenome *genome, 
-    struct trackDb *tdb, struct dyString *errors)
-/* Make sure that track is ok. */
+static void addOneDescription(char *trackDbFile, struct trackDb *tdb)
+/* Fetch tdb->track's html description and store in tdb->html. */
 {
-struct errCatch *errCatch = errCatchNew();
-char *relativeUrl = trackDbSetting(tdb, "bigDataUrl");
-int retVal = 0;
+/* html setting should always be set because we set it at load time */
+char *htmlName = trackDbSetting(tdb, "html");
+if (htmlName == NULL)
+    return;
 
-if (relativeUrl != NULL)
-    {
-    if (errCatchStart(errCatch))
-	{
-	char *bigDataUrl = trackHubRelativeUrl(genome->trackDbFile, relativeUrl);
-	char *type = trackDbRequiredSetting(tdb, "type");
-	verbose(2, "checking %s.%s type %s at %s\n", genome->name, tdb->track, type, bigDataUrl);
-
-	if (startsWithWord("bigWig", type))
-	    {
-	    /* Just open and close to verify file exists and is correct type. */
-	    struct bbiFile *bbi = bigWigFileOpen(bigDataUrl);
-	    bbiFileClose(&bbi);
-	    }
-	else if (startsWithWord("bigBed", type))
-	    {
-	    /* Just open and close to verify file exists and is correct type. */
-	    struct bbiFile *bbi = bigBedFileOpen(bigDataUrl);
-	    bbiFileClose(&bbi);
-	    }
-	else if (startsWithWord("vcfTabix", type))
-	    {
-	    /* Just open and close to verify file exists and is correct type. */
-	    struct vcfFile *vcf = vcfFileMayOpen(bigDataUrl, 1, 1, FALSE);
-
-	    if (vcf == NULL)
-	       errAbort("%s is not a VCF file", bigDataUrl);
-	    vcfFileFree(&vcf);
-	    }
-	else if (startsWithWord("bam", type))
-	    {
-	    /* For bam files, the following call checks both main file and index. */
-	    bamFileExists(bigDataUrl);
-	    }
-	else
-	    errAbort("unrecognized type %s in genome %s track %s", type, genome->name, tdb->track);
-	freez(&bigDataUrl);
-	}
-    errCatchEnd(errCatch);
-    if (errCatch->gotError)
-	{
-	retVal = 1;
-	dyStringPrintf(errors, "%s", errCatch->message->string);
-	}
-    errCatchFree(&errCatch);
-    }
-
-return retVal;
+char *simpleName = hubConnectSkipHubPrefix(htmlName);
+char *url = trackHubRelativeUrl(trackDbFile, simpleName);
+char buffer[10*1024];
+safef(buffer, sizeof buffer, "%s.html", url);
+tdb->html = netReadTextFileIfExists(buffer);
+freez(&url);
 }
+
+void trackHubAddDescription(char *trackDbFile, struct trackDb *tdb)
+/* Fetch tdb->track's html description (or nearest ancestor's non-empty description)
+ * and store in tdb->html. */
+{
+addOneDescription(trackDbFile, tdb);
+if (isEmpty(tdb->html))
+    {
+    struct trackDb *parent;
+    for (parent = tdb->parent;  isEmpty(tdb->html) && parent != NULL;  parent = parent->parent)
+	{
+	addOneDescription(trackDbFile, parent);
+	if (isNotEmpty(parent->html))
+	    tdb->html = cloneString(parent->html);
+	}
+    }
+}
+
 
 void trackHubFixName(char *name)
 /* Change all characters other than alphanumeric, dash, and underbar
@@ -929,200 +973,9 @@ for (tdb = tdbList; tdb != NULL; tdb = next)
     }
 }
 
-static int hubCheckGenome(struct trackHub *hub, struct trackHubGenome *genome,
-    struct dyString *errors, boolean checkTracks)
-/* Check out genome within hub. */
-{
-struct errCatch *errCatch = errCatchNew();
-struct trackDb *tdbList = NULL;
-int retVal = 0;
-
-if (errCatchStart(errCatch))
-    {
-    tdbList = trackHubTracksForGenome(hub, genome);
-    trackHubPolishTrackNames(hub, tdbList);
-    }
-errCatchEnd(errCatch);
-
-if (errCatch->gotError)
-    {
-    retVal = 1;
-    dyStringPrintf(errors, "%s", errCatch->message->string);
-    }
-errCatchFree(&errCatch);
-
-if (!checkTracks)
-    return retVal;
-
-struct trackDb *tdb;
-for (tdb = tdbList; tdb != NULL; tdb = tdb->next)
-    retVal |= hubCheckTrack(hub, genome, tdb, errors);
-verbose(2, "%d tracks in %s\n", slCount(tdbList), genome->name);
-
-return retVal;
-}
-
-int trackHubCheck(char *hubUrl, struct dyString *errors, boolean checkTracks)
-/* hubCheck - Check a track data hub for integrity. Put errors in dyString.
- *      return 0 if hub has no errors, 1 otherwise 
- *      if checkTracks is TRUE, individual tracks are checked
- */
-
-{
-struct errCatch *errCatch = errCatchNew();
-struct trackHub *hub = NULL;
-int retVal = 0;
-
-if (errCatchStart(errCatch))
-    hub = trackHubOpen(hubUrl, "");
-errCatchEnd(errCatch);
-
-if (errCatch->gotError)
-    {
-    retVal = 1;
-    dyStringPrintf(errors, "%s", errCatch->message->string);
-    }
-errCatchFree(&errCatch);
-
-if (hub == NULL)
-    return 1;
-
-verbose(2, "hub %s\nshortLabel %s\nlongLabel %s\n", hubUrl, hub->shortLabel, hub->longLabel);
-verbose(2, "%s has %d elements\n", hub->genomesFile, slCount(hub->genomeList));
-struct trackHubGenome *genome;
-for (genome = hub->genomeList; genome != NULL; genome = genome->next)
-    {
-    retVal |= hubCheckGenome(hub, genome, errors, checkTracks);
-    }
-trackHubClose(&hub);
-
-return retVal;
-}
 
 
-static struct hgPos *bigBedIntervalListToHgPositions(struct bbiFile *bbi, char *term, struct bigBedInterval *intervalList, char *description)
-/* Given an open bigBed file, and an interval list, return a pointer to a list of hgPos structures. */
-{
-struct hgPos *posList = NULL;
-char chromName[bbi->chromBpt->keySize+1];
-int lastChromId = -1;
-struct bigBedInterval *interval;
 
-for (interval = intervalList; interval != NULL; interval = interval->next)
-    {
-    struct hgPos *hgPos;
-    AllocVar(hgPos);
-    slAddHead(&posList, hgPos);
-
-    bbiCachedChromLookup(bbi, interval->chromId, lastChromId, chromName, sizeof(chromName));
-    lastChromId = interval->chromId;
-
-    hgPos->chrom = cloneString(chromName);
-    hgPos->chromStart = interval->start;
-    hgPos->chromEnd = interval->end;
-    hgPos->name = cloneString(term);
-    hgPos->browserName = cloneString(term);
-    hgPos->description = cloneString(description);
-    }
-
-return posList;
-}
-
-static struct hgPos *getPosFromBigBed(char *bigDataUrl, char *indexField, char *term, char *description)
-/* Given a bigBed file with a search index, check for term. */
-{
-struct bbiFile *bbi = bigBedFileOpen(bigDataUrl);
-int fieldIx;
-struct bptFile *bpt = bigBedOpenExtraIndex(bbi, indexField, &fieldIx);
-struct lm *lm = lmInit(0);
-struct bigBedInterval *intervalList;
-intervalList = bigBedNameQuery(bbi, bpt, fieldIx, term, lm);
-
-struct hgPos *posList = bigBedIntervalListToHgPositions(bbi, term, 
-    intervalList, description);
-bbiFileClose(&bbi);
-return posList;
-}
-
-static struct hgPos *doTrixSearch(char *trixFile, struct slName  *indices, char *bigDataUrl, char *term)
-{
-struct trix *trix = trixOpen(trixFile);
-int trixWordCount = 0;
-char *tmp = cloneString(term);
-char *val = nextWord(&tmp);
-char *trixWords[128];
-
-while (val != NULL)
-    {
-    trixWords[trixWordCount] = strLower(val);
-    trixWordCount++;
-    if (trixWordCount == sizeof(trixWords)/sizeof(char*))
-	errAbort("exhausted space for trixWords");
-
-    val = nextWord(&tmp);        
-    }
-
-if (trixWordCount == 0)
-    return NULL;
-
-struct trixSearchResult *tsList = trixSearch(trix, trixWordCount, trixWords, TRUE);
-struct hgPos *posList = NULL;
-char *description = NULL;   // we're not filling in this field at the moment
-for ( ; tsList != NULL; tsList = tsList->next)
-    {
-    struct slName *oneIndex = indices;
-    for (; oneIndex; oneIndex = oneIndex->next)
-	{
-	struct hgPos *posList2 = getPosFromBigBed(bigDataUrl, oneIndex->name, tsList->itemId, description);
-
-	posList = slCat(posList, posList2);
-	}
-    }
-
-return posList;
-}
-
-
-static void findPosInTdbList(struct trackDb *tdbList, char *term, struct hgPositions *hgp)
-/* Given a trackHub's trackDb entries, check each of them for a searchIndex */
-{
-struct trackDb *tdb;
-
-for(tdb=tdbList; tdb; tdb = tdb->next)
-    {
-    char *indexField = trackDbSetting(tdb, "searchIndex");
-    char *bigDataUrl = trackDbSetting(tdb, "bigDataUrl");
-    if (!(indexField && bigDataUrl))
-	continue;
-
-    struct slName *indexList = slNameListFromString(indexField, ',');
-    struct hgPos *posList1 = NULL, *posList2 = NULL;
-    char *trixFile = trackDbSetting(tdb, "searchTrix");
-    // if there is a trix file, use it to search for the term
-    if (trixFile != NULL)
-	posList1 = doTrixSearch(trixFile, indexList, bigDataUrl, term);
-
-    // now search for the raw id's
-    struct slName *oneIndex=indexList;
-    for (; oneIndex; oneIndex = oneIndex->next)
-	{
-	posList2 = getPosFromBigBed(bigDataUrl, oneIndex->name, term, NULL);
-	posList1 = slCat(posList1, posList2);
-	}
-
-    if (posList1 != NULL)
-	{
-	struct hgPosTable *table;
-
-	AllocVar(table);
-	slAddHead(&hgp->tableList, table);
-	table->description = cloneString(tdb->table);
-	table->name = cloneString(tdb->table);
-
-	table->posList = posList1;
-	}
-    }
-}
 
 void trackHubFindPos(char *db, char *term, struct hgPositions *hgp)
 /* Look for term in track hubs.  Update hgp if found */
@@ -1136,5 +989,31 @@ if (trackHubDatabase(db))
 else
     tdbList = hubCollectTracks(db, NULL);
 
-findPosInTdbList(tdbList, term, hgp);
+findBigBedPosInTdbList(db, tdbList, term, hgp);
+}
+
+boolean trackHubGetBlatParams(char *database, boolean isTrans, char **pHost, char **pPort)
+{
+char *hostPort;
+
+if (isTrans)
+    {
+    hostPort = trackHubAssemblyField(database, "transBlat");
+    }
+else
+    {
+    hostPort = trackHubAssemblyField(database, "blat");
+    }
+
+if (hostPort == NULL)
+    return FALSE;
+   
+hostPort = cloneString(hostPort);
+
+*pHost = nextWord(&hostPort);
+if (hostPort == NULL)
+    return FALSE;
+*pPort = hostPort;
+
+return TRUE;
 }
