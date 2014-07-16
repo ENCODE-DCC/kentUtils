@@ -1,0 +1,11 @@
+#!/bin/tcsh -efx
+# Destroy eap* tables in  encodeDataWarehouse and make fresh ones
+
+# This loop presents the tables we're interested in in $t
+foreach t (`grep ^table eapDb.as | awk '{print $2}'`)
+    hgsql -e "drop table $t" encodeDataWarehouse
+end
+hgsql encodeDataWarehouse < eapDb.sql
+
+addSoftware
+
