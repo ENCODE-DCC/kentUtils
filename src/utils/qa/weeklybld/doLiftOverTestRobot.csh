@@ -1,4 +1,4 @@
-#!/bin/tcsh
+#!/usr/bin/env tcsh
 # note this uses java and ant, so it will not work on beta, so run from dev instead
 cd $WEEKLYBLD
 if ( "$HOST" != "hgwdev" ) then
