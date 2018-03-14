@@ -172,6 +172,7 @@ email to: <A HREF="mailto:&#103;&#101;n&#111;&#109;&#101;&#45;&#119;&#119;w&#64;
 Update history
 --------------
 
+* 14 Mar 2018 - add note about this being obsolete and point to current sources
 * 16 Jul 2014 - brought up to date to version 302 source
 * 17 Dec 2013 - brought up to date from version version 286 to version 293 source
 
