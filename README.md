@@ -11,8 +11,6 @@ please refer to:
   http://hgdownload.soe.ucsc.edu/admin/exe/
   
   https://github.com/ucscGenomeBrowser/kent
- 
-Jim Kent command line bioinformatic utilities
 
 These are only the command line bioinformatic utilities
 from the kent source tree.  This is not the genome browser install.
