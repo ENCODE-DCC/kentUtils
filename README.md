@@ -1,13 +1,22 @@
 kentUtils
 ====================
 
+PLEASE NOTE: This repository is not the UCSC Genome Browser source
+code repo, but an outdated collection of some UCSC binary tools from
+2014 used by the ENCODE DCC.  For up to date source and binary images
+please refer to:
+
+  http://hgdownload.soe.ucsc.edu/downloads.html#source_downloads
+  http://hgdownload.soe.ucsc.edu/admin/exe/
+  https://github.com/ucscGenomeBrowser/kent
+ 
 Jim Kent command line bioinformatic utilities
 
 These are only the command line bioinformatic utilities
 from the kent source tree.  This is not the genome browser install.
-For the genome browser install, use the instructions from the source tree:
+For the genome browser install, see instructions:
 
-[src/product/](http://genome-source.cse.ucsc.edu/gitweb/?p=kent.git;a=tree;f=src/product)
+  http://genome.ucsc.edu/goldenPath/help/mirror.html
 
 System Requirements
 -------------------
