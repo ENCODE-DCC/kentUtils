@@ -7,7 +7,9 @@ code repo, but an outdated collection of some UCSC binary tools from
 please refer to:
 
   http://hgdownload.soe.ucsc.edu/downloads.html#source_downloads
+  
   http://hgdownload.soe.ucsc.edu/admin/exe/
+  
   https://github.com/ucscGenomeBrowser/kent
  
 Jim Kent command line bioinformatic utilities
