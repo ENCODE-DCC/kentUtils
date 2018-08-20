@@ -11,9 +11,3 @@ please refer to:
   http://hgdownload.soe.ucsc.edu/admin/exe/
   
   https://github.com/ucscGenomeBrowser/kent
-
-These are only the command line bioinformatic utilities
-from the kent source tree.  This is not the genome browser install.
-For the genome browser install, see instructions:
-
-  http://genome.ucsc.edu/goldenPath/help/mirror.html
