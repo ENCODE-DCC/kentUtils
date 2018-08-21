@@ -1,4 +1,4 @@
-#!/bin/tcsh
+#!/usr/bin/env tcsh
 
 if ( "$HOST" != "hgwbeta" ) then
  echo "error: you must run this script on beta!"
